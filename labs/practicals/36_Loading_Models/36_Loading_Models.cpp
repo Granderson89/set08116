@@ -13,11 +13,14 @@ target_camera cam;
 bool load_content() {
   // *********************************
   // Load in model, models/teapot.obj
+	geometry geom("models/swords2_a.3ds");
+	m = mesh(geom);
 
   // Load in texture, textures/checker.png
+  tex = texture("textures/sw2ao_d.jpg");
 
   // *********************************
-
+  //m.get_transform().scale /= vec3(4.0f, 4.0f, 4.0f);
   // Load in shaders
   eff.add_shader("27_Texturing_Shader/simple_texture.vert", GL_VERTEX_SHADER);
   eff.add_shader("27_Texturing_Shader/simple_texture.frag", GL_FRAGMENT_SHADER);
@@ -51,9 +54,9 @@ bool render() {
 
   // *********************************
   // Bind texture to renderer
-
+  renderer::bind(tex, 0);
   // Set the texture value for the shader here
-
+  glUniform1i(eff.get_uniform_location("tex"), 0);
   // *********************************
 
   // Render mesh

@@ -9,7 +9,7 @@ mesh m;
 effect eff;
 target_camera cam;
 // Main textures
-array<texture, 2> texs;
+array<texture, 4> texs;
 // Blend map
 texture blend_map;
 
@@ -42,8 +42,11 @@ bool load_content() {
   // Load main two textures
   texs[0] = texture("textures/grass.jpg");
   texs[1] = texture("textures/stonygrass.jpg");
+  texs[2] = texture("textures/checker.png");
+  texs[3] = texture("textures/smiley.png");
+
   // Load blend map, try both blend_map1.png and blend_map2.jpg
-  blend_map = texture("textures/blend_map1.png");
+  blend_map = texture("textures/sign.jpg");
 
   // Set camera properties
   cam.set_position(vec3(0.0f, 0.0f, 30.0f));
@@ -76,15 +79,17 @@ bool render() {
 
   // *********************************
   // Bind the three textures - use different index for each
-
-
-
+  renderer::bind(texs[0], 0);
+  renderer::bind(texs[1], 1);
+  renderer::bind(texs[2], 2);
+  renderer::bind(texs[3], 3);
+  renderer::bind(blend_map, 4);
   // *********************************
 
   // Set the uniform values for textures
-  static int tex_indices[] = {0, 1};
-  glUniform1iv(eff.get_uniform_location("tex"), 2, tex_indices);
-  glUniform1i(eff.get_uniform_location("blend"), 2);
+  static int tex_indices[] = {0, 1, 2, 3};
+  glUniform1iv(eff.get_uniform_location("tex"), 4, tex_indices);
+  glUniform1i(eff.get_uniform_location("blend_map"), 4);
 
   // Render the mesh
   renderer::render(m);
