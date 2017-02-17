@@ -7,7 +7,7 @@ using namespace graphics_framework;
 using namespace glm;
 
 // Maximum number of particles
-const unsigned int MAX_PARTICLES = 2 << 11;
+const unsigned int MAX_PARTICLES = 4096;
 
 vec4 positions[MAX_PARTICLES];
 vec4 velocitys[MAX_PARTICLES];
@@ -16,24 +16,30 @@ GLuint G_Position_buffer, G_Velocity_buffer;
 
 effect eff;
 effect compute_eff;
-target_camera cam;
+arc_ball_camera cam;
+double cursor_x = 0.0;
+double cursor_y = 0.0;
 GLuint vao;
+texture tex;
 
 bool load_content() {
-  cout << "Generating " << MAX_PARTICLES << " Particles" << endl;
   default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
   uniform_real_distribution<float> dist;
 
+  tex = texture("textures/smoke.png");
+
   // Initilise particles
   for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-    positions[i] = vec4(((14.0f * dist(rand)) - 7.0f), 8.0f * dist(rand), 0.0f, 0.0f);
-    velocitys[i] = vec4(0.0f, 0.1f + (2.0f * dist(rand)), 0.0f, 0.0f);
+    positions[i] = vec4(((2.0f * dist(rand)) - 1.0f) / 10.0f, 5.0 * dist(rand), 0.0f, 0.0f);
+    velocitys[i] = vec4(0.0f, 0.1f + dist(rand), 0.0f, 0.0f);
   }
-
   // Load in shaders
-  eff.add_shader("shaders/basic_colour.vert", GL_VERTEX_SHADER);
-  eff.add_shader("shaders/basic_colour.frag", GL_FRAGMENT_SHADER);
+  eff.add_shader("68_Smoke_Effect/smoke.vert", GL_VERTEX_SHADER);
+  eff.add_shader("68_Smoke_Effect/smoke.frag", GL_FRAGMENT_SHADER);
+  eff.add_shader("68_Smoke_Effect/smoke.geom", GL_GEOMETRY_SHADER);
+
   eff.build();
+
   // Load in shaders
   compute_eff.add_shader("67_Compute_Shader/particle.comp", GL_COMPUTE_SHADER);
   compute_eff.build();
@@ -58,23 +64,57 @@ bool load_content() {
   // *********************************
    //Unbind
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-  renderer::setClearColour(0, 0, 0);
-
   // Set camera properties
-  cam.set_position(vec3(0, 4.0f, 10.0f));
-  cam.set_target(vec3(0.0f, 4.0f, 0.0f));
+  cam.set_position(vec3(0.0f, 2.5f, 10.0f));
+  cam.set_target(vec3(0.0f, 0, 0.0f));
   cam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
   return true;
 }
 
 bool update(float delta_time) {
+  if (delta_time > 10.0f) {
+    delta_time = 10.0f;
+  }
   renderer::bind(compute_eff);
+  glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, &(vec3(3.0f, 5.0f, 5.0f))[0]);
   glUniform1f(compute_eff.get_uniform_location("delta_time"), delta_time);
-  glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, value_ptr(vec3(7.0f, 8.0f, 5.0f)));
+
+  // Update the camera
+  double current_x;
+  double current_y;
+  static const float sh = static_cast<float>(renderer::get_screen_height());
+  static const float sw = static_cast<float>(renderer::get_screen_height());
+  static const double ratio_width = quarter_pi<float>() / sw;
+  static const double ratio_height = (quarter_pi<float>() * (sh / sw)) / sh;
+
+  // Get the current cursor position
+  glfwGetCursorPos(renderer::get_window(), &current_x, &current_y);
+
+  // Calculate delta of cursor positions from last frame
+  double delta_x = current_x - cursor_x;
+  double delta_y = current_y - cursor_y;
+
+  // Multiply deltas by ratios and delta_time - gets actual change in orientation
+  delta_x *= ratio_width;
+  delta_y *= ratio_height;
+
+  // Rotate cameras by delta
+  cam.rotate(delta_y, delta_x);
+
+  // Use UP and DOWN to change camera distance
+  if (glfwGetKey(renderer::get_window(), GLFW_KEY_UP)) {
+    cam.move(-5.0f * delta_time);
+  }
+  if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) {
+    cam.move(5.0f * delta_time);
+  }
 
   // Update the camera
   cam.update(delta_time);
+
+  // Update cursor pos
+  cursor_x = current_x;
+  cursor_y = current_y;
   return true;
 }
 
@@ -90,36 +130,51 @@ bool render() {
   glMemoryBarrier(GL_ALL_BARRIER_BITS);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+  // *********************************
   // Bind render effect
-  renderer::bind(eff);
-  // Create MVP matrix
-  mat4 M(1.0f);
-  auto V = cam.get_view();
-  auto P = cam.get_projection();
-  auto MVP = P * V * M;
+
+  // Create MV matrix
+
+
+
   // Set the colour uniform
-  glUniform4fv(eff.get_uniform_location("colour"), 1, value_ptr(vec4(1.0f)));
-  // Set MVP matrix uniform
-  glUniformMatrix4fv(eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+
+  // Set MV, and P matrix uniforms seperatly
+
+
+  // Set point_size size uniform to .1f
+
+  // Bind particle texture
+
+
+  // *********************************
 
   // Bind position buffer as GL_ARRAY_BUFFER
   glBindBuffer(GL_ARRAY_BUFFER, G_Position_buffer);
   // Setup vertex format
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  // Enable Blending
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  // Disable Depth Mask
+  glDepthMask(GL_FALSE);
   // Render
   glDrawArrays(GL_POINTS, 0, MAX_PARTICLES);
-  // Tidy up
+  // Tidy up, enable depth mask
+  glDepthMask(GL_TRUE);
+  // Disable Blend
+  glDisable(GL_BLEND);
+  // Unbind all arrays
   glDisableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glUseProgram(0);
-
   return true;
 }
 
 void main() {
   // Create application
-  app application("67_Compute_Shader");
+  app application("68_Smoke_Effect");
   // Set load content, update and render methods
   application.set_load_content(load_content);
   application.set_update(update);

@@ -115,6 +115,7 @@ bool render() {
     auto m = e.second;
     // Create MVP matrix
     auto M = m.get_transform().get_transform_matrix();
+    // *********************************
     // View matrix taken from shadow map
 
     // *********************************
@@ -176,6 +177,7 @@ bool render() {
 
     // Bind shadow map texture - use texture unit 1
 
+	//Set the shadow_map uniform
 
     // Render mesh
 
