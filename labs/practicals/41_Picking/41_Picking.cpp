@@ -93,7 +93,7 @@ bool update(float delta_time) {
 
 	  vec4 ray_start_world = inverse_matrix * ray_start_screen;
 	  ray_start_world = ray_start_world / ray_start_world.w;
-	  vec4 ray_end_world = inverse_matrix * ray_end_world;
+	  vec4 ray_end_world = inverse_matrix * ray_end_screen;
 	  ray_end_world = ray_end_world / ray_end_world.w;
 
 	  direction = normalize(ray_end_world - ray_start_world);
