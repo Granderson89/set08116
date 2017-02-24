@@ -5,7 +5,6 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
-geometry geom;
 geometry stars;
 map<string, mesh> meshes;
 effect eff;
@@ -16,11 +15,7 @@ map<string, texture> textures;
 texture blend_map;
 texture tex;
 target_camera tcam;
-chase_camera ccam;
-bool target;
-bool chase;
-point_light light;
-spot_light spot;
+point_light point;
 double cursor_x = 0.0;
 double cursor_y = 0.0;
 cubemap cube_map;
@@ -102,69 +97,70 @@ bool load_content() {
 	// Create scene
 	meshes["earth"] = mesh(geometry("models/Earth.obj"));
 	meshes["clouds"] = mesh(geometry("models/Earth.obj"));
+	
 	meshes["sun"] = mesh(geometry("models/Earth.obj"));
 	meshes["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
+	
 	stars = geometry_builder::create_box();
-
+	
 	// Transform objects
 	meshes["earth"].get_transform().scale = vec3(1.0f);
 	meshes["earth"].get_transform().translate(vec3(10.0f, 0.0f, -30.0f));
 	meshes["earth"].get_transform().rotate(vec3(0.0f, radians(23.44), 0.0f));
+	
 	meshes["clouds"].get_transform().scale = vec3(1.005f, 1.005f, 1.005f);
 	meshes["clouds"].get_transform().position = meshes["earth"].get_transform().position;
+	
 	meshes["sun"].get_transform().scale = vec3(5.0f, 5.0f, 5.0f);
 	meshes["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
 	meshes["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
-
+	
 	// Set materials
 	// - all emissive is black
 	// - all specular is white
 	// - all shininess is 25
-	// Red box
 	material mat;
 	mat.set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
 	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	mat.set_shininess(25.0f);
 	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	meshes["earth"].set_material(mat);
-
-	
-	mat.set_diffuse(vec4(1.0f, 1.0f, 0.0f, 1.0f));
+	meshes["clouds"].set_material(mat);
 	meshes["black_hole"].set_material(mat);
 
 	mat.set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	meshes["sun"].set_material(mat);
-
+	
 	// Load textures
 	textures["earthTex"] = texture("textures/Earth_tex.tga");
 	textures["sunTex"] = texture("textures/sun_tex.jpg");
 	textures["cloudsTex"] = texture("textures/clouds.png");
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
-
+	
 	// Create background object
 	string background = "textures/stars2.jpg";
 	cube_map = cubemap({ background, background, background, background, background, background });
 	
 	// Set lighting values, Position
-	light.move(vec3(0.0f, 0.0f, 0.0f));
+	point.move(vec3(0.0f, 0.0f, 0.0f));
 	// Light colour white
-	light.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	point.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	// Set range to 20
-	light.set_range(1000.0f);
+	point.set_range(1000.0f);
 
-	spot.move(vec3(5.0f, 0.0f, 5.0f));
-	spot.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	spot.set_direction(normalize(meshes["sun"].get_transform().position - spot.get_position()));
-	spot.set_range(1000.0f);
-	spot.set_power(1.0f);
+	//spot.move(vec3(5.0f, 0.0f, 5.0f));
+	//spot.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	//spot.set_direction(normalize(meshes["sun"].get_transform().position - spot.get_position()));
+	//spot.set_range(1000.0f);
+	//spot.set_power(1.0f);
 
 	// Load in shaders for planets
 	eff.add_shader("shaders/simple_texture.vert", GL_VERTEX_SHADER);
 	eff.add_shader("shaders/simple_texture.frag", GL_FRAGMENT_SHADER);
 	// Build effect
 	eff.build();
-
+	
 	// Load in shaders for background
 	sbeff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
 	sbeff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
@@ -179,7 +175,7 @@ bool load_content() {
 	suneff.add_shader("shaders/sun_texture.vert", GL_VERTEX_SHADER);
 	suneff.add_shader("shaders/sun_texture.frag", GL_FRAGMENT_SHADER);
 	suneff.build();
-
+	
 	// Set camera properties
 	tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
 	// *********************************
@@ -232,8 +228,9 @@ bool update(float delta_time) {
 	}
 	// 2 - (10, 60, 10)
 	if (glfwGetKey(renderer::get_window(), 't')) {
-		target = true;
+		//target = true;
 	}
+	
 	tcam.update(delta_time);
 
 	// *********************************
@@ -242,7 +239,7 @@ bool update(float delta_time) {
 	// *********************************
 
 	// Check to see if the sun has been clicked to destroy the solar system
-
+	
 	// If mouse button pressed get ray and check for intersection
 	if (glfwGetMouseButton(renderer::get_window(), GLFW_MOUSE_BUTTON_LEFT))
 	{
@@ -287,6 +284,7 @@ bool update(float delta_time) {
 			}
 		}
 	}
+	
 	return true;
 }
 
@@ -314,7 +312,15 @@ bool render() {
 		P = tcam.get_projection();
 		auto MVP = P * V * M;
 		// Set MVP matrix uniform
-		glUniformMatrix4fv(eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+		glUniformMatrix4fv(eff.get_uniform_location("MVP"), 
+			1, 
+			GL_FALSE, 
+			value_ptr(MVP));
+		// Set M matrix uniform
+		glUniformMatrix4fv(eff.get_uniform_location("M"),
+			1,
+			GL_FALSE,
+			value_ptr(M));
 		// Set N matrix uniform - remember - 3x3 matrix
 		glUniformMatrix3fv(eff.get_uniform_location("N"),
 			1,
@@ -323,10 +329,7 @@ bool render() {
 		// Bind material
 		renderer::bind(m.get_material(), "mat");
 		// Bind light
-		renderer::bind(light, "point");
-		// Bind spot lights
-		//renderer::bind(spot, "spot");
-
+		renderer::bind(point, "point");
 		// Bind and set textures
 		renderer::bind(textures[e.first + "Tex"], 0);
 		glUniform1i(eff.get_uniform_location("tex"), 0);
@@ -335,7 +338,7 @@ bool render() {
 		// Render mesh
 		renderer::render(m);
 	}
-
+	
 	// Render clouds
 	renderer::bind(ceff);
 	// Create MVP matrix
@@ -344,13 +347,32 @@ bool render() {
 	P = tcam.get_projection();
 	auto MVP = P * V * M;
 	// Set MVP matrix uniform
-	glUniformMatrix4fv(ceff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	glUniformMatrix4fv(ceff.get_uniform_location("MVP"),
+		1, 
+		GL_FALSE, 
+		value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(ceff.get_uniform_location("M"),
+		1,
+		GL_FALSE,
+		value_ptr(M));
+	// Set N matrix uniform - remember - 3x3 matrix
+	glUniformMatrix3fv(ceff.get_uniform_location("N"),
+		1,
+		GL_FALSE,
+		value_ptr(meshes["clouds"].get_transform().get_normal_matrix()));
+	// Bind material
+	renderer::bind(meshes["clouds"].get_material(), "mat");
+	// Bind light
+	renderer::bind(point, "point");
 	// Bind and set textures
 	renderer::bind(textures["cloudsTex"], 0);
 	glUniform1i(ceff.get_uniform_location("tex"), 0);
+	// Set eye position- Get this from active camera
+	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(tcam.get_position()));
 	// Render mesh
 	renderer::render(meshes["clouds"]);
-	/*
+	
 	// Bind effect
 	renderer::bind(suneff);
 	// Create MVP matrix
@@ -368,7 +390,7 @@ bool render() {
 	// Bind material
 	renderer::bind(meshes["sun"].get_material(), "mat");
 	// Bind light
-	renderer::bind(light, "point");
+	renderer::bind(point, "point");
 	// Bind spot lights
 	//renderer::bind(spot, "spot");
 	// Bind and set textures
@@ -378,7 +400,7 @@ bool render() {
 	glUniform3fv(suneff.get_uniform_location("eye_pos"), 1, value_ptr(tcam.get_position()));
 	// Render mesh
 	renderer::render(meshes["sun"]);
-	*/
+	
 	// Render background
 	glDisable(GL_CULL_FACE);
 	renderer::bind(sbeff);

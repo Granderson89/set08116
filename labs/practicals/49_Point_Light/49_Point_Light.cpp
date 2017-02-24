@@ -90,7 +90,7 @@ bool load_content() {
   light.set_range(20.0f);
   // Load in shaders
   eff.add_shader("49_Point_Light/point.vert", GL_VERTEX_SHADER);
-  eff.add_shader("49_Point_Light/point.vert", GL_VERTEX_SHADER);
+  eff.add_shader("49_Point_Light/point.frag", GL_FRAGMENT_SHADER);
   // Build effect
   eff.build();
   // *********************************

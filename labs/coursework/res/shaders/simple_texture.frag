@@ -8,7 +8,7 @@ struct point_light {
   float linear;
   float quadratic;
 };
-
+/*
 // Spot light data
 struct spot_light {
   vec4 light_colour;
@@ -19,7 +19,7 @@ struct spot_light {
   float quadratic;
   float power;
 };
-
+*/
 // Material information
 struct material {
   vec4 emissive;
@@ -30,8 +30,10 @@ struct material {
 
 // Point light for the scene
 uniform point_light point;
+/*
 // Spot light for the scene
 uniform spot_light spot;
+*/
 // Material for the object
 uniform material mat;
 // Eye position
@@ -78,7 +80,7 @@ vec4 calculate_point(in point_light point, in material mat, in vec3 vertex_posit
   // *********************************
   return final_colour;
 }
-
+/*
 // Spot light calculation
 vec4 calculate_spot(in spot_light spot, in material mat, in vec3 vertex_position, in vec3 transformed_normal, in vec3 view_dir,
                     in vec4 tex_colour) {
@@ -110,8 +112,9 @@ vec4 calculate_spot(in spot_light spot, in material mat, in vec3 vertex_position
   // *********************************
   return final_colour;
 }
-
+*/
 void main() {
+/*
  // *********************************
  colour = vec4(0.0, 0.0, 0.0, 1.0);
   // *********************************
@@ -125,6 +128,33 @@ void main() {
   // Sum spot lights
 
     colour += calculate_spot(spot, mat, vertex_position, transformed_normal, view_dir, tex_colour);
-  
+  */
+  // Get distance between point light and vertex
+  float d = distance(point.position, vertex_position);
+  // Calculate attenuation factor
+  float att = 1.0f / (point.constant + point.linear * d + point.quadratic * (d * d));
+  // Calculate light colour
+  vec4 colour_pos = att * point.light_colour;
+  // Calculate light dir
+  vec3 light_dir = normalize(point.position - vertex_position);
+
+  // Now use standard phong shading but using calculated light colour and direction
+  // - note no ambient
+  // Calculate diffuse component
+  vec4 diffuse = max(dot(transformed_normal, light_dir), 0.0) * (mat.diffuse_reflection * colour_pos);
+  // Calculate view direction
+  vec3 view_dir = normalize(eye_pos - vertex_position);
+  // Calculate half vector
+  vec3 half_vector = normalize(light_dir + view_dir);
+  // Calculate specular component
+  float ks = pow(max(dot(transformed_normal, half_vector), 0.0), mat.shininess);
+  vec4 specular = ks * (mat.specular_reflection * colour_pos);
+  // Sample texture
+  vec4 tex_colour = texture(tex, tex_coord_out);
+  // Calculate primary colour component
+  vec4 primary = mat.emissive + diffuse;
+  // Calculate final colour - remember alpha
+  colour = primary * tex_colour + specular;
+  colour.a = 1.0;
   // *********************************
 }
