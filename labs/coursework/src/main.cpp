@@ -5,22 +5,48 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
+geometry alien;
 geometry stars;
+map<string, geometry> geoms;
 map<string, mesh> meshes;
+cubemap cube_map;
+
 effect eff;
 effect sbeff;
 effect ceff;
 effect suneff;
+
 map<string, texture> textures;
 texture blend_map;
 texture tex;
+
 target_camera tcam;
-point_light point;
+free_camera fcam;
+chase_camera ccam;
+bool chase_camera_active = false;
+bool free_camera_active = false;
+
+vector<point_light> points(2);
+vector<spot_light> spots(1);
+
 double cursor_x = 0.0;
 double cursor_y = 0.0;
-cubemap cube_map;
+string selected = "earth";
+
 float rotAngle = 0.0f;
 bool destroy_solar_system = false;
+bool pause = false;
+
+
+bool initialise() {
+	// *********************************
+	// Set input mode - hide the cursor
+	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	// Capture initial mouse position
+	glfwGetCursorPos(renderer::get_window(), &cursor_x, &cursor_y);
+	// *********************************
+	return true;
+}
 
 void orbit(mesh &m, mesh &sun, string name, float delta_time)
 {
@@ -94,31 +120,26 @@ void black_hole(float delta_time)
 }
 
 bool load_content() {
-	// Create scene
+	// Meshes
 	meshes["earth"] = mesh(geometry("models/Earth.obj"));
 	meshes["clouds"] = mesh(geometry("models/Earth.obj"));
-	
 	meshes["sun"] = mesh(geometry("models/Earth.obj"));
 	meshes["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
-	
+	meshes["alien"] = mesh((geometry(geometry_builder::create_box())));
+	// Skybox
 	stars = geometry_builder::create_box();
-	
 	// Transform objects
 	meshes["earth"].get_transform().scale = vec3(1.0f);
 	meshes["earth"].get_transform().translate(vec3(10.0f, 0.0f, -30.0f));
 	meshes["earth"].get_transform().rotate(vec3(0.0f, radians(23.44), 0.0f));
-	
 	meshes["clouds"].get_transform().scale = vec3(1.005f, 1.005f, 1.005f);
 	meshes["clouds"].get_transform().position = meshes["earth"].get_transform().position;
-	
 	meshes["sun"].get_transform().scale = vec3(5.0f, 5.0f, 5.0f);
 	meshes["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
 	meshes["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
-	
+	meshes["alien"].get_transform().translate(vec3(10.0f, 10.0f, -30.0f));
+
 	// Set materials
-	// - all emissive is black
-	// - all specular is white
-	// - all shininess is 25
 	material mat;
 	mat.set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
 	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
@@ -126,34 +147,42 @@ bool load_content() {
 	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	meshes["earth"].set_material(mat);
 	meshes["clouds"].set_material(mat);
-	meshes["black_hole"].set_material(mat);
+	meshes["alien"].set_material(mat);
 
 	mat.set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	meshes["sun"].set_material(mat);
 	
+	mat.set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	meshes["black_hole"].set_material(mat);
+
 	// Load textures
 	textures["earthTex"] = texture("textures/Earth_tex.tga");
 	textures["sunTex"] = texture("textures/sun_tex.jpg");
 	textures["cloudsTex"] = texture("textures/clouds.png");
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
-	
-	// Create background object
+	textures["alienTex"] = texture("textures/white.jpg");
+
+	// Create skybox
 	string background = "textures/stars2.jpg";
 	cube_map = cubemap({ background, background, background, background, background, background });
 	
-	// Set lighting values, Position
-	point.move(vec3(0.0f, 0.0f, 0.0f));
+	// Set point light values, Position
+	points[0].move(vec3(0.0f, 1.0f, 0.0f));
 	// Light colour white
-	point.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	points[0].set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	// Set range to 20
-	point.set_range(1000.0f);
+	points[0].set_range(1000.0f);
 
-	//spot.move(vec3(5.0f, 0.0f, 5.0f));
-	//spot.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	//spot.set_direction(normalize(meshes["sun"].get_transform().position - spot.get_position()));
-	//spot.set_range(1000.0f);
-	//spot.set_power(1.0f);
+	// Set spot light values
+	// Selection light (red)
+	// Default position is above Earth
+	spots[0].set_position(meshes["earth"].get_transform().position + vec3(0.0f, 5.0f, 0.0f));
+	spots[0].set_light_colour(vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	// Point towards Earth
+	spots[0].set_direction(normalize(meshes["earth"].get_transform().position - spots[0].get_position()));
+	spots[0].set_range(2.0f);
+	spots[0].set_power(1.0f);
 
 	// Load in shaders for planets
 	eff.add_shader("shaders/simple_texture.vert", GL_VERTEX_SHADER);
@@ -161,7 +190,7 @@ bool load_content() {
 	// Build effect
 	eff.build();
 	
-	// Load in shaders for background
+	// Load in shaders for skybox
 	sbeff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
 	sbeff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
 	sbeff.build();
@@ -176,70 +205,158 @@ bool load_content() {
 	suneff.add_shader("shaders/sun_texture.frag", GL_FRAGMENT_SHADER);
 	suneff.build();
 	
-	// Set camera properties
+	// Set target camera properties
 	tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
-	// *********************************
-	// Use this to focus on object of choice
-	// cam.set_target(meshes[].get_transform().position);
-	// *********************************
 	tcam.set_target(vec3(0.0f, 0.0f, 0.0f));
 	tcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
+
+	/*
+	//TESTING
+	tcam.set_position(vec3(10.0f, 20.0f, 10.0f));
+	tcam.set_target(meshes["alien"].get_transform().position);
+	*/
+	// Set free camera properties
+	fcam.set_position(vec3(50.0f, 10.0f, 50.0f));
+	fcam.set_target(vec3(0.0f, 0.0f, 0.0f));
+	fcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
+	
+	// Set chase camera properties
+	ccam.set_pos_offset(vec3(0.0f, 2.0f, 10.0f));
+	ccam.set_springiness(0.5f);
+	ccam.move(meshes["earth"].get_transform().position, eulerAngles(meshes["earth"].get_transform().orientation));
+	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
 	return true;
 }
 
-bool update(float delta_time) {
-	// Check if solar system is to be destroyed
-	if (destroy_solar_system == true)
-	{
-		black_hole(delta_time);
-	}
-	// All planets orbit "sun"
-	auto sun = meshes["sun"];
-	// Control solar objects motion
-	for (auto &e : meshes)
-	{
-		auto &m = e.second;
-		// The sun and the black hole rotate around the origin
-		if (e.first == "sun" || e.first == "black_hole")
-		{
-			m.get_transform().rotate(vec3(0.0f, delta_time / 2.0f, 0.0f));
-		}
-		// The clouds rotate twice as fast as the Earth
-		else if (e.first == "clouds")
-		{
-			m.get_transform().rotate(vec3(0.0f, 2.0f * delta_time, 0.0f));
-			orbit(m, sun, e.first, delta_time);
-		}
-		// All planets simply orbit the sun/black hole
-		else
-		{
-			orbit(m, sun, e.first, delta_time);
-		}
-	}
+void chase_camera_update(float delta_time)
+{
+	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	// The target object for chase camera
+	static mesh &target_mesh = meshes["earth"];
+	// The ratio of pixels to rotation - remember the fov
+	static const float sh = static_cast<float>(renderer::get_screen_height());
+	static const float sw = static_cast<float>(renderer::get_screen_height());
+	static const double ratio_width = quarter_pi<float>() / sw;
+	static const double ratio_height = (quarter_pi<float>() * (sh / sw)) / sh;
+
+	double current_x;
+	double current_y;
+	// *********************************
+	// Get the current cursor position
+	glfwGetCursorPos(renderer::get_window(), &current_x, &current_y);
+
+	// Calculate delta of cursor positions from last frame
+	double delta_x = current_x - cursor_x;
+	double delta_y = current_y - cursor_y;
+
+	// Multiply deltas by ratios - gets actual change in orientation
+	delta_x = delta_x * ratio_width;
+	delta_y = delta_y * ratio_height;
+
+	// Rotate cameras by delta
+	// x - delta_y
+	// y - delta_x
+	// z - 0
+	ccam.rotate(vec3(delta_y, delta_x, 0.0f));
+
+	// Move camera - update target position and rotation
+	ccam.move(target_mesh.get_transform().position, vec3(0.0f, 0.0f, 0.0f));
+
 	// Update the camera
+	ccam.update(delta_time);
+
+	// Update cursor pos
+	cursor_x = current_x;
+	cursor_y = current_y;
+}
+
+void free_camera_update(float delta_time)
+{
+	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	// Update the camera
+	// Use keyboard to change camera location
+	// 1 - (50, 10, 50)
+	if (glfwGetKey(renderer::get_window(), '1')) {
+		fcam.set_position(vec3(50.0f, 10.0f, 50.0f));
+	}
+	// 2 - (10, 60, 10)
+	if (glfwGetKey(renderer::get_window(), '2')) {
+		fcam.set_position(vec3(10.0f, 60.0f, 10.0f));
+	}
+	// The ratio of pixels to rotation - remember the fov
+	static double ratio_width = quarter_pi<float>() / static_cast<float>(renderer::get_screen_width());
+	static double ratio_height =
+		(quarter_pi<float>() *
+		(static_cast<float>(renderer::get_screen_height()) / static_cast<float>(renderer::get_screen_width()))) /
+		static_cast<float>(renderer::get_screen_height());
+
+	double current_x;
+	double current_y;
+	// *********************************
+	// Get the current cursor position
+	GLFWwindow* window = renderer::get_window();
+	glfwGetCursorPos(window, &current_x, &current_y);
+
+	// Calculate delta of cursor positions from last frame
+	double delta_x = current_x - cursor_x;
+	double delta_y = current_y - cursor_y;
+
+	// Multiply deltas by ratios - gets actual change in orientation
+	delta_x = delta_x * ratio_width;
+	delta_y = delta_y * ratio_height;
+
+	// Rotate cameras by delta
+	// delta_y - x-axis rotation
+	// delta_x - y-axis rotation
+	fcam.rotate(delta_x, delta_y);
+
+	// Use keyboard to move the camera - WSAD
+	if (glfwGetKey(renderer::get_window(), 'W')) {
+		fcam.move(vec3(0.0f, 0.0f, 1.0f));
+	}
+	if (glfwGetKey(renderer::get_window(), 'S')) {
+		fcam.move(vec3(0.0f, 0.0f, -1.0f));
+	}
+	if (glfwGetKey(renderer::get_window(), 'A')) {
+		fcam.move(vec3(-1.0f, 0.0f, 0.0f));
+	}
+	if (glfwGetKey(renderer::get_window(), 'D')) {
+		fcam.move(vec3(1.0f, 0.0f, 0.0f));
+	}
+
+	// Update the camera
+	fcam.update(delta_time);
+
+	// Update cursor pos
+	cursor_x = current_x;
+	cursor_y = current_y;
+}
+
+void target_camera_update(float delta_time)
+{
+	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	// Use keyboard to change camera location
 	// 1 - (50, 10, 50)
 	if (glfwGetKey(renderer::get_window(), '1')) {
 		tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
 	}
-	// 2 - (10, 60, 10)
+	// 2 - (-50, 10, 50)
 	if (glfwGetKey(renderer::get_window(), '2')) {
-		tcam.set_position(vec3(10.0f, 60.0f, 10.0f));
+		tcam.set_position(vec3(-50.0f, 10.0f, 50.0f));
 	}
-	// 2 - (10, 60, 10)
-	if (glfwGetKey(renderer::get_window(), 't')) {
-		//target = true;
+	// 3 - (-50, 10, -50)
+	if (glfwGetKey(renderer::get_window(), '3')) {
+		tcam.set_position(vec3(-50.0f, 10.0f, -50.0f));
 	}
-	
+	// 4 - (50, 10, -50)
+	if (glfwGetKey(renderer::get_window(), '4')) {
+		tcam.set_position(vec3(50.0f, 10.0f, -50.0f));
+	}
+	// Update the camera
 	tcam.update(delta_time);
 
-	// *********************************
-	// Use this to focus on object of choice
-	// cam.set_target(meshes[].get_transform().position);
-	// *********************************
+	// Get selected item
 
-	// Check to see if the sun has been clicked to destroy the solar system
-	
 	// If mouse button pressed get ray and check for intersection
 	if (glfwGetMouseButton(renderer::get_window(), GLFW_MOUSE_BUTTON_LEFT))
 	{
@@ -280,76 +397,114 @@ bool update(float delta_time) {
 				{
 					destroy_solar_system = true;
 				}
+				spots[0].set_position(m.second.get_transform().position + vec3(0.0f, 5.0f, 0.0f));
+				spots[0].set_direction(m.second.get_transform().position - spots[0].get_position());
+				selected = m.first;
 				cout << m.first << " " << distance << endl;
 			}
 		}
 	}
-	
-	return true;
 }
 
-bool render() {
-	// Render planets and sun
-	auto V = tcam.get_view();
-	auto P = tcam.get_projection();
-	for (auto &e : meshes) {
-		// Skip meshes: not to be rendered with eff,
-		//				with scale of 0 (sucked into black hole),
-		//				not to be rendered unless sun has been clicked
-		if (e.first == "clouds" || 
-			e.second.get_transform().scale == vec3(0.0f) ||
-			e.first == "sun" ||
-			(e.first == "black_hole" && destroy_solar_system == false))
+bool update(float delta_time) {
+	// *** USER CONTROLS ***
+	// Camera controls
+	// c - switch to chase camera
+	if (glfwGetKey(renderer::get_window(), 'C'))
+	{
+		chase_camera_active = true;
+		free_camera_active = false;
+	}
+	// t - switch to target camera
+	if (glfwGetKey(renderer::get_window(), 'T'))
+	{
+		chase_camera_active = false;
+		free_camera_active = false;
+	}
+	// f - switch to free camera
+	if (glfwGetKey(renderer::get_window(), 'F'))
+	{
+		chase_camera_active = false;
+		free_camera_active = true;
+	}
+	// Alien ship controls (arrow keys)
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_UP)) {
+		meshes["alien"].get_transform().translate(vec3(0.0f, 1.0f, 0.0f));
+	}
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) {
+		meshes["alien"].get_transform().translate(vec3(0.0f, -1.0f, 0.0f));
+	}
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_LEFT)) {
+		meshes["alien"].get_transform().translate(vec3(-1.0f, 0.0f, 0.0f));
+	}
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_RIGHT)) {
+		meshes["alien"].get_transform().translate(vec3(1.0f, 0.0f, 0.0f));
+	}
+
+	// *** MOTION ***
+	// All planets orbit "sun"
+	auto sun = meshes["sun"];
+	// Control orbiting objects motion
+	for (auto &e : meshes)
+	{
+		auto &m = e.second;
+		// Ignore the alien ship
+		if (e.first == "alien")
 		{
 			continue;
 		}
-		auto m = e.second;
-		// Bind effect
-		renderer::bind(eff);
-		// Create MVP matrix
-		auto M = m.get_transform().get_transform_matrix();
-		V = tcam.get_view();
-		P = tcam.get_projection();
-		auto MVP = P * V * M;
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(eff.get_uniform_location("MVP"), 
-			1, 
-			GL_FALSE, 
-			value_ptr(MVP));
-		// Set M matrix uniform
-		glUniformMatrix4fv(eff.get_uniform_location("M"),
-			1,
-			GL_FALSE,
-			value_ptr(M));
-		// Set N matrix uniform - remember - 3x3 matrix
-		glUniformMatrix3fv(eff.get_uniform_location("N"),
-			1,
-			GL_FALSE,
-			value_ptr(m.get_transform().get_normal_matrix()));
-		// Bind material
-		renderer::bind(m.get_material(), "mat");
-		// Bind light
-		renderer::bind(point, "point");
-		// Bind and set textures
-		renderer::bind(textures[e.first + "Tex"], 0);
-		glUniform1i(eff.get_uniform_location("tex"), 0);
-		// Set eye position- Get this from active camera
-		glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(tcam.get_position()));
-		// Render mesh
-		renderer::render(m);
+		// The sun and the black hole spin around the origin
+		if (e.first == "sun" || e.first == "black_hole")
+		{
+			m.get_transform().rotate(vec3(0.0f, -delta_time / 2.0f, 0.0f));
+		}
+		// The clouds rotate twice as fast as the Earth
+		else if (e.first == "clouds")
+		{
+			m.get_transform().rotate(vec3(0.0f, 2.0f * delta_time, 0.0f));
+			orbit(m, sun, e.first, delta_time);
+		}
+		// All planets simply orbit the sun/black hole
+		else
+		{
+			orbit(m, sun, e.first, delta_time);
+		}
 	}
-	
+	spots[0].set_position(meshes[selected].get_transform().position + vec3(0.0f, 5.0f, 0.0f));
+	// *** CAMERA MODE ***
+	// Update depending on active camera
+	if (chase_camera_active)
+	{
+		chase_camera_update(delta_time);
+	}
+	else if (free_camera_active)
+	{
+		free_camera_update(delta_time);
+	}
+	else
+	{
+		target_camera_update(delta_time);
+	}
+	cout << "FPS: " << 1.0f / delta_time << endl;
+	// Check if solar system is to be destroyed
+	if (destroy_solar_system == true)
+	{
+		black_hole(delta_time);
+	}
+	return true;
+}
+
+void render_clouds(mat4 P, mat4 V)
+{
 	// Render clouds
 	renderer::bind(ceff);
 	// Create MVP matrix
 	auto M = meshes["clouds"].get_transform().get_transform_matrix();
-	V = tcam.get_view();
-	P = tcam.get_projection();
 	auto MVP = P * V * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(ceff.get_uniform_location("MVP"),
-		1, 
-		GL_FALSE, 
+		1,
+		GL_FALSE,
 		value_ptr(MVP));
 	// Set M matrix uniform
 	glUniformMatrix4fv(ceff.get_uniform_location("M"),
@@ -364,22 +519,24 @@ bool render() {
 	// Bind material
 	renderer::bind(meshes["clouds"].get_material(), "mat");
 	// Bind light
-	renderer::bind(point, "point");
+	renderer::bind(points, "points");
+	renderer::bind(spots, "spots");
 	// Bind and set textures
 	renderer::bind(textures["cloudsTex"], 0);
 	glUniform1i(ceff.get_uniform_location("tex"), 0);
 	// Set eye position- Get this from active camera
-	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(tcam.get_position()));
+	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
 	// Render mesh
 	renderer::render(meshes["clouds"]);
-	
+}
+
+void render_sun(mat4 P, mat4 V)
+{
 	// Bind effect
 	renderer::bind(suneff);
 	// Create MVP matrix
-	M = meshes["sun"].get_transform().get_transform_matrix();
-	V = tcam.get_view();
-	P = tcam.get_projection();
-	MVP = P * V * M;
+	auto M = meshes["sun"].get_transform().get_transform_matrix();
+	auto MVP = P * V * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(suneff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	// Set N matrix uniform - remember - 3x3 matrix
@@ -390,27 +547,111 @@ bool render() {
 	// Bind material
 	renderer::bind(meshes["sun"].get_material(), "mat");
 	// Bind light
-	renderer::bind(point, "point");
+	renderer::bind(points, "points");
 	// Bind spot lights
-	//renderer::bind(spot, "spot");
+	renderer::bind(spots, "spots");
 	// Bind and set textures
 	renderer::bind(textures["sunTex"], 0);
 	glUniform1i(suneff.get_uniform_location("tex"), 0);
 	// Set eye position- Get this from active camera
-	glUniform3fv(suneff.get_uniform_location("eye_pos"), 1, value_ptr(tcam.get_position()));
+	glUniform3fv(suneff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
 	// Render mesh
 	renderer::render(meshes["sun"]);
-	
-	// Render background
+}
+
+void render_planets(mesh m, string name, mat4 P, mat4 V)
+{
+	// Bind effect
+	renderer::bind(eff);
+	// Create MVP matrix
+	auto M = m.get_transform().get_transform_matrix();
+	auto MVP = P * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
+		1,
+		GL_FALSE,
+		value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("M"),
+		1,
+		GL_FALSE,
+		value_ptr(M));
+	// Set N matrix uniform - remember - 3x3 matrix
+	glUniformMatrix3fv(eff.get_uniform_location("N"),
+		1,
+		GL_FALSE,
+		value_ptr(m.get_transform().get_normal_matrix()));
+	// Bind material
+	renderer::bind(m.get_material(), "mat");
+	// Bind light
+	renderer::bind(points, "points");
+	renderer::bind(spots, "spots");
+	// Bind and set textures
+	renderer::bind(textures[name + "Tex"], 0);
+	glUniform1i(eff.get_uniform_location("tex"), 0);
+	// Set eye position- Get this from active camera
+	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
+	// Render mesh
+	renderer::render(m);
+}
+
+void render_skybox(mat4 P, mat4 V)
+{
 	glDisable(GL_CULL_FACE);
 	renderer::bind(sbeff);
-	MVP = P * V * scale(mat4(), vec3(200.0f));
+	auto MVP = P * V * scale(mat4(), vec3(200.0f));
 	glUniformMatrix4fv(sbeff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	renderer::bind(cube_map, 0);
 	glUniform1i(sbeff.get_uniform_location("cubemap"), 0);
 	renderer::render(stars);
 	glEnable(GL_CULL_FACE);
-	
+}
+
+bool render() {
+	// Get view and projection matrices from active camera
+	mat4 V;
+	mat4 P;
+	if (chase_camera_active)
+	{
+		V = ccam.get_view();
+		P = ccam.get_projection();
+	}
+	else if (free_camera_active)
+	{
+		V = fcam.get_view();
+		P = fcam.get_projection();
+	}
+	else
+	{
+		V = tcam.get_view();
+		P = tcam.get_projection();
+	}
+	// Render objects
+	for (auto &e : meshes) {
+		// Skip meshes: with scale of 0 (sucked into black hole),
+		//				not to be rendered unless sun has been clicked
+		if (e.first == "clouds" ||
+			e.second.get_transform().scale == vec3(0.0f) ||
+			e.first == "alien_beam" ||
+			(e.first == "black_hole" && destroy_solar_system == false))
+		{
+			continue;
+		}
+		// Render sun
+		else if (e.first == "sun")
+		{
+			render_sun(P, V);
+		}
+		// Render planets
+		else
+		{
+			render_planets(e.second, e.first, P, V);
+		}
+	}
+	// Render clouds
+	render_clouds(P, V);
+	// Render background
+	render_skybox(P, V);
   return true;
 }
 
@@ -421,6 +662,7 @@ void main() {
   app application("Graphics Coursework");
   // Set load content, update and render methods
   application.set_load_content(load_content);
+  application.set_initialise(initialise);
   application.set_update(update);
   application.set_render(render);
   // Run application

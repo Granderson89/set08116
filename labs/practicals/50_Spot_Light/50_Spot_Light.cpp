@@ -20,7 +20,7 @@ bool load_content() {
   meshes["tetra"] = mesh(geometry_builder::create_tetrahedron());
   meshes["pyramid"] = mesh(geometry_builder::create_pyramid());
   meshes["disk"] = mesh(geometry_builder::create_disk(20));
-  meshes["cylinder"] = mesh(geometry_builder::create_cylinder(20, 20));
+  meshes["cylinder"] = mesh(geometry_builder::create_cylinder(20, 10));
   meshes["sphere"] = mesh(geometry_builder::create_sphere(20, 20));
   meshes["torus"] = mesh(geometry_builder::create_torus(20, 20, 1.0f, 5.0f));
 
