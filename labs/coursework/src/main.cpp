@@ -9,7 +9,9 @@ geometry alien;
 geometry stars;
 map<string, geometry> geoms;
 map<string, mesh> meshes;
+map<string, float> orbit_factors;
 cubemap cube_map;
+
 
 effect eff;
 effect sbeff;
@@ -80,6 +82,7 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	// Increment rotAngle to calcualte next position
 	rotAngle = rotAngle * (180.0f / pi<float>());
 	rotAngle += 0.5f;
+	rotAngle = rotAngle + orbit_factors[name];
 	rotAngle = radians(rotAngle);
 	float factor = 1.0f / (radius * radius);
 	cout << name << " " << radius << " " << rotAngle << endl;
@@ -126,11 +129,16 @@ bool load_content() {
 	meshes["sun"] = mesh(geometry("models/Earth.obj"));
 	meshes["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
 	meshes["alien"] = mesh((geometry(geometry_builder::create_box())));
+	meshes["mercury"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+	meshes["venus"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+	meshes["mars"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+
 	// Skybox
-	stars = geometry_builder::create_box();
+	stars = geometry_builder::create_box(vec3(5.0f));
+
 	// Transform objects
 	meshes["earth"].get_transform().scale = vec3(1.0f);
-	meshes["earth"].get_transform().translate(vec3(10.0f, 0.0f, -30.0f));
+	meshes["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
 	meshes["earth"].get_transform().rotate(vec3(0.0f, radians(23.44), 0.0f));
 	meshes["clouds"].get_transform().scale = vec3(1.005f, 1.005f, 1.005f);
 	meshes["clouds"].get_transform().position = meshes["earth"].get_transform().position;
@@ -138,6 +146,22 @@ bool load_content() {
 	meshes["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
 	meshes["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
 	meshes["alien"].get_transform().translate(vec3(10.0f, 10.0f, -30.0f));
+	meshes["venus"].get_transform().scale = vec3(2.0f);
+	meshes["venus"].get_transform().translate(0.72f * meshes["earth"].get_transform().position);
+	meshes["venus"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	meshes["mercury"].get_transform().scale = 0.3f * meshes["venus"].get_transform().scale;
+	meshes["mercury"].get_transform().translate(0.39f * meshes["earth"].get_transform().position);
+	meshes["mercury"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	meshes["mars"].get_transform().scale = 0.53f * meshes["venus"].get_transform().scale;
+	meshes["mars"].get_transform().translate(1.52f * meshes["earth"].get_transform().position);
+	meshes["mars"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));	
+	
+	// Set orbit factors
+	orbit_factors["mercury"] = 1.5f;
+	orbit_factors["venus"] = 1.1f;
+	orbit_factors["earth"] = 0.0f;
+	orbit_factors["clouds"] = 0.0f;
+	orbit_factors["mars"] = -0.235f;
 
 	// Set materials
 	material mat;
@@ -148,9 +172,17 @@ bool load_content() {
 	meshes["earth"].set_material(mat);
 	meshes["clouds"].set_material(mat);
 	meshes["alien"].set_material(mat);
+	meshes["venus"].set_material(mat);
+	meshes["mars"].set_material(mat);
+
+	mat.set_specular(vec4(0.5f, 0.5f, 0.5f, 1.0f));
+	mat.set_shininess(100.0f);
+	meshes["mercury"].set_material(mat);
 
 	mat.set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	mat.set_shininess(25.0f);
 	meshes["sun"].set_material(mat);
 	
 	mat.set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -162,11 +194,14 @@ bool load_content() {
 	textures["cloudsTex"] = texture("textures/clouds.png");
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
 	textures["alienTex"] = texture("textures/white.jpg");
+	textures["mercuryTex"] = texture("textures/mercury_tex.jpg");
+	textures["venusTex"] = texture("textures/venus.jpg");
+	textures["marsTex"] = texture("textures/mars.jpg");
 
 	// Create skybox
-	string background = "textures/stars2.jpg";
-	cube_map = cubemap({ background, background, background, background, background, background });
-	
+	array<string, 6> filenames = { "textures/stars_ft.jpg", "textures/stars_bk.jpg", "textures/stars_up.jpg", "textures/stars_dn.jpg", "textures/stars_lt.jpg", "textures/stars_rt.jpg" };
+	cube_map = cubemap(filenames);
+		
 	// Set point light values, Position
 	points[0].move(vec3(0.0f, 1.0f, 0.0f));
 	// Light colour white
@@ -206,7 +241,7 @@ bool load_content() {
 	suneff.build();
 	
 	// Set target camera properties
-	tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
+	tcam.set_position(vec3(60.0f, 10.0f, 60.0f));
 	tcam.set_target(vec3(0.0f, 0.0f, 0.0f));
 	tcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
 
@@ -223,7 +258,7 @@ bool load_content() {
 	// Set chase camera properties
 	ccam.set_pos_offset(vec3(0.0f, 2.0f, 10.0f));
 	ccam.set_springiness(0.5f);
-	ccam.move(meshes["earth"].get_transform().position, eulerAngles(meshes["earth"].get_transform().orientation));
+	ccam.move(meshes["mercury"].get_transform().position, eulerAngles(meshes["mercury"].get_transform().orientation));
 	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
 	return true;
 }
@@ -232,7 +267,7 @@ void chase_camera_update(float delta_time)
 {
 	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	// The target object for chase camera
-	static mesh &target_mesh = meshes["earth"];
+	static mesh &target_mesh = meshes["mercury"];
 	// The ratio of pixels to rotation - remember the fov
 	static const float sh = static_cast<float>(renderer::get_screen_height());
 	static const float sw = static_cast<float>(renderer::get_screen_height());
