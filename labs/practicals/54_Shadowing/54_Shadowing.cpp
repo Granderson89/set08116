@@ -34,7 +34,7 @@ bool load_content() {
 	meshes["plane"] = mesh(geometry_builder::create_plane());
 	// Create "teapot" mesh by loading in models/teapot.obj
 	meshes["teapot"] = mesh(geometry("models/teapot.obj"));
-	// Translate Teapot(0,4,0)
+	// Translate teapot(0,4,0)
 	meshes["teapot"].get_transform().translate(vec3(0.0f, 4.0f, 0.0f));
   // Scale the teapot - (0.1, 0.1, 0.1)
 	meshes["teapot"].get_transform().scale = vec3(0.1f);
