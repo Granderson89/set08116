@@ -9,9 +9,22 @@ map<string, mesh> meshes;
 effect main_eff;
 effect shadow_eff;
 texture tex;
-target_camera cam;
+free_camera cam;
 spot_light spot;
 shadow_map shadow;
+double cursor_x = 0.0;
+double cursor_y = 0.0;
+
+bool initialise() {
+	// *********************************
+	// Set input mode - hide the cursor
+	GLFWwindow* window = renderer::get_window();
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	// Capture initial mouse position
+	glfwGetCursorPos(window, &cursor_x, &cursor_y);
+	// *********************************
+	return true;
+}
 
 bool load_content() {
   // *********************************
@@ -82,19 +95,72 @@ bool update(float delta_time) {
   // Rotate the teapot
   meshes["teapot"].get_transform().rotate(vec3(0.0f, half_pi<float>(), 0.0f) * delta_time);
 
-  if (glfwGetKey(renderer::get_window(), '1')) {
-    cam.set_position(vec3(0.0f, 50.0f, -75.0f));
+  // The ratio of pixels to rotation - remember the fov
+  static double ratio_width = quarter_pi<float>() / static_cast<float>(renderer::get_screen_width());
+  static double ratio_height =
+	  (quarter_pi<float>() *
+	  (static_cast<float>(renderer::get_screen_height()) / static_cast<float>(renderer::get_screen_width()))) /
+	  static_cast<float>(renderer::get_screen_height());
+
+  double current_x;
+  double current_y;
+  // *********************************
+  // Get the current cursor position
+  glfwGetCursorPos(renderer::get_window(), &current_x, &current_y);
+
+  // Calculate delta of cursor positions from last frame
+  double delta_x = current_x - cursor_x;
+  double delta_y = current_y - cursor_y;
+
+  // Multiply deltas by ratios - gets actual change in orientation
+  delta_x = delta_x * ratio_width;
+  delta_y = delta_y * ratio_height;
+
+  // Rotate cameras by delta
+  // delta_y - x-axis rotation
+  // delta_x - y-axis rotation
+  cam.rotate(delta_x, delta_y);
+
+  // Use keyboard to move the camera - WSAD
+  vec3 dir;
+  if (glfwGetKey(renderer::get_window(), 'W')) {
+	  dir += vec3(0.0f, 0.0f, 1.0f);
   }
-  if (glfwGetKey(renderer::get_window(), '2')) {
-    cam.set_position(spot.get_position());
+  if (glfwGetKey(renderer::get_window(), 'S')) {
+	  dir += vec3(0.0f, 0.0f, -1.0f);
   }
-  if (glfwGetKey(renderer::get_window(), '3')) {
-    cam.set_position(vec3(-25.0, 50.0, 0.0));
+  if (glfwGetKey(renderer::get_window(), 'A')) {
+	  dir += vec3(-1.0f, 0.0f, 0.0f);
   }
-  if (glfwGetKey(renderer::get_window(), '4')) {
-    cam.set_position(vec3(-50, 2.0, 0));
+  if (glfwGetKey(renderer::get_window(), 'D')) {
+	  dir += vec3(1.0f, 0.0f, 0.0f);
   }
+
+  vec3 light_move;
+  if (glfwGetKey(renderer::get_window(), GLFW_KEY_UP)) {
+	  light_move += vec3(0.0f, 0.0f, 1.0f);
+  }
+  if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) {
+	  light_move += vec3(0.0f, 0.0f, -1.0f);
+  }
+  if (glfwGetKey(renderer::get_window(), GLFW_KEY_LEFT)) {
+	  light_move += vec3(-1.0f, 0.0f, 0.0f);
+  }
+  if (glfwGetKey(renderer::get_window(), GLFW_KEY_RIGHT)) {
+	  light_move += vec3(1.0f, 0.0f, 0.0f);
+  }
+
+  // Move camera
+  cam.move(dir);
+  spot.move(light_move);
+  // Update the camera
   cam.update(delta_time);
+
+  // Update cursor pos
+  cursor_x = current_x;
+  cursor_y = current_y;
+
+  // *********************************
 
   // *********************************
   // Update the shadow map light_position from the spot light
@@ -213,6 +279,7 @@ void main() {
   app application("54_Shadowing");
   // Set load content, update and render methods
   application.set_load_content(load_content);
+  application.set_initialise(initialise);
   application.set_update(update);
   application.set_render(render);
   // Run application

@@ -6,7 +6,7 @@ using namespace graphics_framework;
 using namespace glm;
 
 geometry alien;
-geometry stars;
+mesh stars;
 map<string, geometry> geoms;
 map<string, mesh> meshes;
 map<string, float> orbit_factors;
@@ -136,7 +136,8 @@ bool load_content() {
 	// Create shadow map- use screen size
 	shadow = shadow_map(renderer::get_screen_width(), renderer::get_screen_height());
 	// Skybox
-	stars = geometry_builder::create_box(vec3(5.0f));
+	stars = mesh(geometry_builder::create_box());
+	stars.get_transform().scale = vec3(1000.0f);
 
 	// Transform objects
 	meshes["earth"].get_transform().scale = vec3(1.0f);
@@ -316,6 +317,9 @@ void chase_camera_update(float delta_time)
 	// Update cursor pos
 	cursor_x = current_x;
 	cursor_y = current_y;
+
+	// Set skybox position to camera position (camera in centre of skybox)
+	stars.get_transform().position = ccam.get_position();
 }
 
 void free_camera_update(float delta_time)
@@ -378,6 +382,9 @@ void free_camera_update(float delta_time)
 	// Update cursor pos
 	cursor_x = current_x;
 	cursor_y = current_y;
+
+	// Set skybox position to camera position (camera in centre of skybox)
+	stars.get_transform().position = fcam.get_position();
 }
 
 void target_camera_update(float delta_time)
@@ -402,7 +409,8 @@ void target_camera_update(float delta_time)
 	}
 	// Update the camera
 	tcam.update(delta_time);
-
+	// Set skybox position to camera position (camera in centre of skybox)
+	stars.get_transform().position = tcam.get_position();
 	// Get selected item
 
 	// If mouse button pressed get ray and check for intersection
@@ -710,14 +718,21 @@ void render_planets(mesh m, string name, mat4 P, mat4 V)
 }
 
 void render_skybox(mat4 P, mat4 V)
-{
+{  
+	// Disable depth test,depth mask,face culling
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
 	glDisable(GL_CULL_FACE);
+	// Bind skybox effect
 	renderer::bind(sbeff);
-	auto MVP = P * V * scale(mat4(), vec3(200.0f));
+	// Calculate MVP for the skybox
+	auto MVP = P * V * stars.get_transform().get_transform_matrix();
 	glUniformMatrix4fv(sbeff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	renderer::bind(cube_map, 0);
 	glUniform1i(sbeff.get_uniform_location("cubemap"), 0);
 	renderer::render(stars);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
 	glEnable(GL_CULL_FACE);
 }
 
@@ -741,6 +756,8 @@ bool render() {
 		V = tcam.get_view();
 		P = tcam.get_projection();
 	}
+	// Render background
+	render_skybox(P, V);
 	// Render objects
 	for (auto &e : meshes) {
 		// Skip meshes: with scale of 0 (sucked into black hole),
@@ -766,8 +783,6 @@ bool render() {
 	}
 	// Render clouds
 	render_clouds(P, V);
-	// Render background
-	render_skybox(P, V);
   return true;
 }
 

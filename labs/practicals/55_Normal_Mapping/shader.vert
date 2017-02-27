@@ -1,4 +1,4 @@
-#version 450 core
+#version 440
 
 // The transformation matrix
 uniform mat4 MVP;
@@ -41,8 +41,8 @@ void main() {
 
   // *********************************
   // Transform tangent
-
+  tangent_out = N * tangent;
   // Transform binormal
-
+  binormal_out = N * binormal;
   // *********************************
 }
