@@ -42,6 +42,7 @@ vec4 calculate_point(in point_light point, in material mat, in vec3 position, in
                      in vec4 tex_colour);
 vec4 calculate_spot(in spot_light spot, in material mat, in vec3 position, in vec3 normal, in vec3 view_dir,
                     in vec4 tex_colour);
+float calculate_shadow(in sampler2D shadow_map, in vec4 light_space_pos);
 
 // Point light for the scene
 uniform point_light points[1];
@@ -53,7 +54,8 @@ uniform material mat;
 uniform vec3 eye_pos;
 // Sampler used to get texture colour
 uniform sampler2D tex;
-
+// Shadow map to sample from
+uniform sampler2D shadow_map;
 
 // Incoming texture coordinate
 layout(location = 0) in vec3 vertex_position;
@@ -61,33 +63,37 @@ layout(location = 0) in vec3 vertex_position;
 layout(location = 1) in vec3 transformed_normal;
 // Incoming texture coordinate
 layout(location = 2) in vec2 tex_coord_out;
+// Incoming light space position
+layout(location = 3) in vec4 light_space_pos;
 
 // Outgoing colour
-layout(location = 0) out vec4 colour;
+layout(location = 0) out vec4 out_colour;
 
 void main() {
   // *********************************
+  // Calculate shade factor
+  float shade = calculate_shadow(shadow_map, light_space_pos);
   // Calculate view direction
   vec3 view_dir = normalize(eye_pos - vertex_position);
   // Sample texture
   vec4 tex_colour = texture(tex, tex_coord_out);
-  // Sum point lights
-  for (int i = 0; i < 2; ++i)
+  for (int i = 0; i < 1; ++i)
   {
-    colour += calculate_point(points[i], mat, vertex_position, transformed_normal, view_dir, tex_colour);
+    out_colour += calculate_point(points[i], mat, vertex_position, transformed_normal, view_dir, tex_colour);
   }
   // Sum spot lights
   for (int i = 0; i < 1; ++i)
   {
-    colour += calculate_spot(spots[i], mat, vertex_position, transformed_normal, view_dir, tex_colour);
+    out_colour += calculate_spot(spots[i], mat, vertex_position, transformed_normal, view_dir, tex_colour);
   }
-  colour.a = 1.0f;
+  out_colour *= shade;
+  out_colour.a = 1.0f;
   float transparency_factor = 0.3f;
-  if (colour.r < transparency_factor && 
-      colour.g < transparency_factor && 
-	  colour.b < transparency_factor)
+  if (out_colour.r < transparency_factor && 
+      out_colour.g < transparency_factor && 
+	  out_colour.b < transparency_factor)
   {
-     colour.a = 0.0f;
+     out_colour.a = 0.0f;
   }
   // *********************************
 }

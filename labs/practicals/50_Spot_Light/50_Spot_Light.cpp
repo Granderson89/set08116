@@ -89,7 +89,7 @@ bool load_content() {
   // Light colour white
   light.set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
   // Light direction to forward and down (normalized)
-  light.set_direction(vec3(0.0f, -1.0f, -1.0f));
+  light.set_direction(normalize(vec3(0.0f, -1.0f, -1.0f)));
   // Set range to 20
   light.set_range(20.0f);
   // Set power to 1

@@ -6,6 +6,8 @@ uniform mat4 MVP;
 uniform mat4 M;
 // The normal matrix
 uniform mat3 N;
+// The light transformation matrix
+uniform mat4 lightMVP;
 
 // Incoming position
 layout (location = 0) in vec3 position;
@@ -32,4 +34,6 @@ void main()
 	// Calculate world position of vertex
 	vertex_position = vec3(M * vec4(position, 1.0f));
 	tex_coord_out = tex_coord_in;
+	// Transform position into light space
+	vertex_light = lightMVP * vec4(position, 1.0);
 }
