@@ -1,3 +1,5 @@
+#version 440
+
 // Calculates the shadow factor of a vertex
 float calculate_shadow(in sampler2D shadow_map, in vec4 light_space_pos) {
   // Get light screen space coordinate

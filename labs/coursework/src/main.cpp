@@ -5,7 +5,6 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
-geometry alien;
 mesh stars;
 map<string, geometry> geoms;
 map<string, mesh> meshes;
@@ -17,9 +16,9 @@ effect sbeff;
 effect ceff;
 effect suneff;
 effect shadoweff;
+
 map<string, texture> textures;
 texture blend_map;
-texture tex;
 
 target_camera tcam;
 free_camera fcam;
@@ -38,6 +37,11 @@ string selected = "earth";
 float rotAngle = 0.0f;
 bool destroy_solar_system = false;
 
+effect ship_eff;
+array<mesh, 7> enterprise;
+array<mesh, 2> motions;
+array<texture, 2> motions_textures;
+array<texture, 7> enterprise_textures;
 
 bool initialise() {
 	// *********************************
@@ -131,7 +135,6 @@ bool load_content() {
 	meshes["mercury"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
 	meshes["venus"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
 	meshes["mars"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	meshes["plane"] = mesh(geometry(geometry_builder::create_plane()));
 	// Create shadow map- use screen size
 	shadow = shadow_map(renderer::get_screen_width(), renderer::get_screen_height());
 	// Skybox
@@ -157,7 +160,6 @@ bool load_content() {
 	meshes["mars"].get_transform().scale = 0.53f * meshes["venus"].get_transform().scale;
 	meshes["mars"].get_transform().translate(1.52f * meshes["earth"].get_transform().position);
 	meshes["mars"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
-	meshes["plane"].get_transform().position = vec3(0.0, -30.0f, 0.0f);
 
 	// Set orbit factors
 	orbit_factors["mercury"] = 1.5f;
@@ -200,8 +202,6 @@ bool load_content() {
 	textures["mercuryTex"] = texture("textures/mercury_tex.jpg");
 	textures["venusTex"] = texture("textures/venus.jpg");
 	textures["marsTex"] = texture("textures/mars.jpg");
-	textures["planeTex"] = texture("textures/white.jpg");
-
 	// Create skybox
 	array<string, 6> filenames = { "textures/stars_ft.jpg", "textures/stars_bk.jpg", "textures/stars_up.jpg", "textures/stars_dn.jpg", "textures/stars_lt.jpg", "textures/stars_rt.jpg" };
 	cube_map = cubemap(filenames);
@@ -216,16 +216,16 @@ bool load_content() {
 	// Set spot light values
 	// Selection light (red)
 	// Default position is above Earth
-	spots[0].set_position(vec3(20.0f, 20.0f, 20.0f));
+	spots[0].set_position(vec3(60.0f, 20.0f, 60.0f));
 	spots[0].set_light_colour(vec4(1.0f, 0.0f, 0.0f, 1.0f));
 	// Point towards Earth
 	spots[0].set_direction(normalize(vec3(-1.0f, -1.0f, 0.0f)));
-	spots[0].set_range(5.0f);
+	spots[0].set_range(1000.0f);
 	spots[0].set_power(1.0f);
 
 	// Load in shaders for planets
 	eff.add_shader("shaders/simple_texture.vert", GL_VERTEX_SHADER);
-	vector<string> eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag" };
+	vector<string> eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag"};
 	eff.add_shader(eff_frag_shaders, GL_FRAGMENT_SHADER);
 	// Build effect
 	eff.build();
@@ -243,7 +243,7 @@ bool load_content() {
 
 	// Load in shaders for sun
 	suneff.add_shader("shaders/sun_texture.vert", GL_VERTEX_SHADER);
-	vector<string> seff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag" };
+	vector<string> seff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag"};
 	suneff.add_shader(seff_frag_shaders, GL_FRAGMENT_SHADER);
 	suneff.build();
 
@@ -251,6 +251,63 @@ bool load_content() {
 	shadoweff.add_shader("shaders/multi-light.vert", GL_VERTEX_SHADER);
 	shadoweff.add_shader("shaders/multi-light.frag", GL_FRAGMENT_SHADER);
 	shadoweff.build();
+
+	// *********************************
+	// Create Three Identical Box Meshes
+	// Saucer section
+	enterprise[0] = mesh(geometry_builder::create_cylinder(20, 50, vec3(10.0f, 1.0f, 10.0f)));
+	// Connection
+	enterprise[1] = mesh(geometry_builder::create_box(vec3(1.0f, 4.0f, 1.0f)));
+	// Shaft?
+	enterprise[2] = mesh(geometry_builder::create_cylinder(20, 20, vec3(1.5f, 8.0f, 1.5f)));
+	// Nacelles
+	enterprise[3] = mesh(geometry_builder::create_cylinder(20, 20, vec3(1.0f, 10.0, 1.0f)));
+	enterprise[4] = mesh(geometry_builder::create_cylinder(20, 20, vec3(1.0f, 10.0, 1.0f)));
+	enterprise[5] = mesh(geometry_builder::create_box(vec3(0.1f, 5.0f, 1.0f)));
+	enterprise[6] = mesh(geometry_builder::create_box(vec3(0.1f, 5.0f, 1.0f)));
+
+	// Motions
+	motions[0] = mesh(geometry_builder::create_sphere(20, 20, vec3(0.5f)));
+	motions[1] = mesh(geometry_builder::create_sphere(20, 20, vec3(0.5f)));
+
+	// Saucer section
+	enterprise[0].get_transform().position = vec3(50.0f, 10.0f, 50.0f);
+	// Connection
+	enterprise[1].get_transform().position = vec3(0.0f, -2.5f, -4.5f);
+	// Shaft?
+	enterprise[2].get_transform().position = vec3(0.0f, -2.0f, -3.25f);
+	enterprise[2].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
+	// Nacelles
+	enterprise[3].get_transform().position = vec3(3.0f, -4.0f, -5.0f);
+	enterprise[4].get_transform().position = vec3(-6.0f, 0.0f, 0.0f);
+	// Nacelle connectors
+	enterprise[5].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+	enterprise[5].get_transform().position = vec3(1.5f, 1.5f, 2.5f);
+	enterprise[5].get_transform().rotate(vec3(0.0f, 0.0f, half_pi<float>() / 3.0f));
+	enterprise[6].get_transform().rotate(vec3(0.0f, 0.0f, -pi<float>() / 3.0f));
+	enterprise[6].get_transform().position = vec3(2.5f, -1.5f, 0.0f);
+
+	motions[0].get_transform().position = enterprise[0].get_transform().position - vec3(3.0f, -0.5f, 6.75f);
+	motions[1].get_transform().position = enterprise[0].get_transform().position - vec3(-3.0f, -0.5f, 6.75f);
+
+	// Load texture
+	enterprise_textures[0] = texture("textures/check_2.png");
+	enterprise_textures[1] = texture("textures/check_4.png");
+	enterprise_textures[2] = texture("textures/check_5.png");
+	enterprise_textures[3] = texture("textures/check_2.png");
+	enterprise_textures[4] = texture("textures/check_4.png");
+	enterprise_textures[5] = texture("textures/check_5.png");
+	enterprise_textures[6] = texture("textures/check_2.png");
+
+	motions_textures[0] = texture("textures/check_4.png");
+	motions_textures[1] = texture("textures/check_5.png");
+
+	// Load in shaders for enterprise
+	ship_eff.add_shader("shaders/enterprise.vert", GL_VERTEX_SHADER);
+	vector<string> ship_eff_frag_shaders{ "shaders/enterprise.frag", "shaders/part_spot.frag", "shaders/part_shadow.frag" };
+	ship_eff.add_shader(ship_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	// Build effect
+	ship_eff.build();
 
 	// Set target camera properties
 	tcam.set_position(vec3(60.0f, 10.0f, 60.0f));
@@ -520,6 +577,40 @@ bool update(float delta_time) {
 			orbit(m, sun, e.first, delta_time);
 		}
 	}
+	// Use keyboard to move the camera - WSAD
+	vec3 engage;
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_UP)) {
+		engage += vec3(0.0f, 0.0f, 1.0f);
+	}
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) {
+		engage += vec3(0.0f, 0.0f, -1.0f);
+	}
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_LEFT)) {
+		engage += vec3(-1.0f, 0.0f, 0.0f);
+	}
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_RIGHT)) {
+		engage += vec3(1.0f, 0.0f, 0.0f);
+	}
+
+	enterprise[0].get_transform().translate(engage);
+	motions[0].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
+	motions[1].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
+	motions[0].get_transform().translate(engage);
+	motions[1].get_transform().translate(engage);
+	// Check if solar system is to be destroyed
+	if (destroy_solar_system == true)
+	{
+		black_hole(delta_time);
+	}
+	// *********************************
+	// Update the shadow map light_position from the spot light
+	shadow.light_position = spots[0].get_position();
+	// do the same for light_dir property
+	shadow.light_dir = spots[0].get_direction();
+	// *********************************
+	// Press s to save
+	if (glfwGetKey(renderer::get_window(), 'S') == GLFW_PRESS)
+		shadow.buffer->save("test.png");
 	// *** CAMERA MODE ***
 	// Update depending on active camera
 	if (chase_camera_active)
@@ -535,20 +626,7 @@ bool update(float delta_time) {
 		target_camera_update(delta_time);
 	}
 	cout << "FPS: " << 1.0f / delta_time << endl;
-	// Check if solar system is to be destroyed
-	if (destroy_solar_system == true)
-	{
-		black_hole(delta_time);
-	}
-	// *********************************
-	// Update the shadow map light_position from the spot light
-	shadow.light_position = spots[0].get_position();
-	// do the same for light_dir property
-	shadow.light_dir = spots[0].get_direction();
-	// *********************************
-	// Press s to save
-	if (glfwGetKey(renderer::get_window(), 'S') == GLFW_PRESS)
-		shadow.buffer->save("test.png");
+
 	return true;
 }
 
@@ -578,7 +656,6 @@ void render_clouds(mat4 P, mat4 V)
 	renderer::bind(meshes["clouds"].get_material(), "mat");
 	// Bind light
 	renderer::bind(points, "points");
-	renderer::bind(spots, "spots");
 	// Bind and set textures
 	renderer::bind(textures["cloudsTex"], 0);
 	glUniform1i(ceff.get_uniform_location("tex"), 0);
@@ -606,8 +683,6 @@ void render_sun(mat4 P, mat4 V)
 	renderer::bind(meshes["sun"].get_material(), "mat");
 	// Bind light
 	renderer::bind(points, "points");
-	// Bind spot lights
-	renderer::bind(spots, "spots");
 	// Bind and set textures
 	renderer::bind(textures["sunTex"], 0);
 	glUniform1i(suneff.get_uniform_location("tex"), 0);
@@ -619,46 +694,6 @@ void render_sun(mat4 P, mat4 V)
 
 void render_planets(mesh m, string name, mat4 P, mat4 V)
 {
-	// *********************************
-	// Set render target to shadow map
-	renderer::set_render_target(shadow);
-	// Clear depth buffer bit
-	glClear(GL_DEPTH_BUFFER_BIT);
-	// Set face cull mode to front
-	glCullFace(GL_FRONT);
-	// *********************************
-
-	// We could just use the Camera's projection, 
-	// but that has a narrower FoV than the cone of the spot light, so we would get clipping.
-	// so we have yo create a new Proj Mat with a field of view of 90.
-	mat4 LightProjectionMat = perspective<float>(90.f, renderer::get_screen_aspect(), 0.1f, 1000.f);
-
-	// Bind shader
-	renderer::bind(shadoweff);
-	// Render meshes
-	for (auto &e : meshes) {
-		auto m = e.second;
-		// Create MVP matrix
-		auto M = m.get_transform().get_transform_matrix();
-		// *********************************
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
-		// *********************************
-		auto MVP = LightProjectionMat * V * M;
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(shadoweff.get_uniform_location("MVP"), // Location of uniform
-			1,                                      // Number of values - 1 mat4
-			GL_FALSE,                               // Transpose the matrix?
-			value_ptr(MVP));                        // Pointer to matrix data
-													// Render mesh
-		renderer::render(m);
-	}
-	// *********************************
-	// Set render target back to the screen
-	renderer::set_render_target();
-	// Set face cull mode to back
-	glCullFace(GL_BACK);
-
 	// Bind effect
 	renderer::bind(eff);
 	// Create MVP matrix
@@ -680,25 +715,12 @@ void render_planets(mesh m, string name, mat4 P, mat4 V)
 		GL_FALSE,
 		value_ptr(m.get_transform().get_normal_matrix()));
 	// *********************************
-	// Set lightMVP uniform, using:
-	//Model matrix from m
-
-	// viewmatrix from the shadow map
-
-	// Multiply together with LightProjectionMat
-	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
-	// Set uniform
-	glUniformMatrix4fv(eff.get_uniform_location("lightMVP"),
-		1,
-		GL_FALSE,
-		value_ptr(lightMVP));
 	// Bind material
 	renderer::bind(m.get_material(), "mat");
 	// Bind light
 	if (name != "sun")
 	{
 		renderer::bind(points, "points");
-		renderer::bind(spots, "spots");
 	}
 	// Bind and set textures
 	renderer::bind(textures[name + "Tex"], 0);
@@ -733,22 +755,96 @@ void render_skybox(mat4 P, mat4 V)
 }
 
 bool render() {
+	// Set render target to shadow map
+	renderer::set_render_target(shadow);
+	// Clear depth buffer bit
+	glClear(GL_DEPTH_BUFFER_BIT);
+	// Set face cull mode to front
+	glCullFace(GL_FRONT);
+	// *********************************
+
+	// We could just use the Camera's projection, 
+	// but that has a narrower FoV than the cone of the spot light, so we would get clipping.
+	// so we have yo create a new Proj Mat with a field of view of 90.
+	mat4 LightProjectionMat = perspective<float>(90.f, renderer::get_screen_aspect(), 0.1f, 1000.f);
+
+	// Bind shader
+	renderer::bind(shadoweff);
+	// Render meshes
+	for (auto &e : meshes) {
+		auto m = e.second;
+		// Create MVP matrix
+		auto M = m.get_transform().get_transform_matrix();
+		// *********************************
+		// View matrix taken from shadow map
+		auto V = shadow.get_view();
+		// *********************************
+		auto MVP = LightProjectionMat * V * M;
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(shadoweff.get_uniform_location("MVP"), // Location of uniform
+			1,                                      // Number of values - 1 mat4
+			GL_FALSE,                               // Transpose the matrix?
+			value_ptr(MVP));                        // Pointer to matrix data
+													// Render mesh
+		renderer::render(m);
+	}
+	// Render meshes
+	for (size_t i = 0; i < enterprise.size(); i++) {
+		// *********************************
+		// SET M to be the usual mesh  transform matrix
+		auto M = enterprise[i].get_transform().get_transform_matrix();
+		// *********************************
+
+		// Apply the heirarchy chain
+		for (size_t j = i; j > 0; j--) {
+			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
+		}
+		// View matrix taken from shadow map
+		auto V = shadow.get_view();
+		// *********************************
+		auto MVP = LightProjectionMat * V * M;
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(shadoweff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+		// Render mesh
+		renderer::render(enterprise[i]);
+	}
+	for (int i = 0; i < motions.size(); i++)
+	{
+		auto M = motions[i].get_transform().get_transform_matrix();
+		// View matrix taken from shadow map
+		auto V = shadow.get_view();
+		// *********************************
+		auto MVP = LightProjectionMat * V * M;
+		glUniformMatrix4fv(shadoweff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+		renderer::render(motions[i]);
+	}
+	// *********************************
+	// Set render target back to the screen
+	renderer::set_render_target();
+	// Set face cull mode to back
+	glCullFace(GL_BACK);
+	// *********************************
+
 	// *********************************
 	// Get view and projection matrices from active camera
 	mat4 V;
 	mat4 P;
+	vec3 cam_pos;
 	if (chase_camera_active)
 	{
+		cam_pos = ccam.get_position();
 		V = ccam.get_view();
 		P = ccam.get_projection();
 	}
 	else if (free_camera_active)
 	{
+		cam_pos = fcam.get_position();
 		V = fcam.get_view();
 		P = fcam.get_projection();
 	}
 	else
 	{
+		cam_pos = tcam.get_position();
 		V = tcam.get_view();
 		P = tcam.get_projection();
 	}
@@ -778,6 +874,68 @@ bool render() {
 	}
 	// Render clouds
 	render_clouds(P, V);
+
+	// Render Enterprise
+	// Bind effect
+	renderer::bind(ship_eff);
+	// Get PV
+	const auto PV = P * V;
+	// Set the texture value for the shader here
+	glUniform1i(ship_eff.get_uniform_location("tex"), 0);
+	// Find the lcoation for the MVP uniform
+	const auto loc = ship_eff.get_uniform_location("MVP");
+	// Render meshes
+	for (size_t i = 0; i < enterprise.size(); i++) {
+		// *********************************
+		// SET M to be the usual mesh  transform matrix
+		auto M = enterprise[i].get_transform().get_transform_matrix();
+		// *********************************
+
+		// Apply the heirarchy chain
+		for (size_t j = i; j > 0; j--) {
+			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
+		}
+
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(loc, 1, GL_FALSE, value_ptr(PV * M));
+		// Set M matrix uniform
+		glUniformMatrix4fv(ship_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
+		// Set N matrix uniform
+		glUniformMatrix3fv(ship_eff.get_uniform_location("N"), 1, GL_FALSE,
+			value_ptr(enterprise[i].get_transform().get_normal_matrix()));
+		// *********************************
+		// Set lightMVP uniform, using:
+		//Model matrix from m
+		// viewmatrix from the shadow map
+		// Multiply together with LightProjectionMat
+		auto lightMVP = LightProjectionMat * shadow.get_view() * M;
+		// Set uniform
+		glUniformMatrix4fv(ship_eff.get_uniform_location("lightMVP"),
+			1,
+			GL_FALSE,
+			value_ptr(lightMVP));
+		// Bind material
+		renderer::bind(meshes["earth"].get_material(), "mat");
+		// Bind spot light
+		renderer::bind(spots[0], "spot");
+		// Bind texture to renderer
+		renderer::bind(enterprise_textures[i], 0);
+		// Set eye position
+		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+		// Bind shadow map texture - use texture unit 1
+		renderer::bind(shadow.buffer->get_depth(), 1);
+		// Set the shadow_map uniform
+		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 1);
+		// Render mesh
+		renderer::render(enterprise[i]);
+	}
+	for (int i = 0; i < motions.size(); i++)
+	{
+		auto M = motions[i].get_transform().get_transform_matrix();
+		glUniformMatrix4fv(loc, 1, GL_FALSE, value_ptr(PV * M));
+		renderer::bind(motions_textures[i], 0);
+		renderer::render(motions[i]);
+	}
 	return true;
 }
 

@@ -1,3 +1,5 @@
+#version 440
+
 // Point light information
 #ifndef POINT_LIGHT
 #define POINT_LIGHT
