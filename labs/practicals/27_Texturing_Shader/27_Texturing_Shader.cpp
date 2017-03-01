@@ -46,7 +46,7 @@ bool load_content() {
   // Build effect
   eff.build();
   // Load texture "textures/sign.jpg"
-  tex = texture("textures/smiley.png");
+  tex = texture("textures/sign.jpg");
   // *********************************
   // Set camera properties
   cam.set_position(vec3(10.0f, 10.0f, 10.0f));

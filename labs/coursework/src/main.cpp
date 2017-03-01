@@ -6,18 +6,24 @@ using namespace graphics_framework;
 using namespace glm;
 
 mesh stars;
-map<string, mesh> meshes;
-map<string, float> orbit_factors;
+map<string, mesh> solar_objects;
 cubemap cube_map;
+array<mesh, 7> enterprise;
+array<mesh, 2> motions;
+array<texture, 2> motions_textures;
+mesh shadow_plane;
 
-effect eff;
+effect planet_eff;
 effect sbeff;
 effect ceff;
 effect suneff;
+effect ship_eff;
 effect shadow_eff;
 
 map<string, texture> textures;
+map<string, texture> normal_maps;
 texture blend_map;
+texture enterprise_texture;
 
 target_camera tcam;
 free_camera fcam;
@@ -25,37 +31,23 @@ chase_camera ccam;
 bool chase_camera_active = false;
 bool free_camera_active = false;
 
+directional_light directional;
 vector<point_light> points(1);
 vector<spot_light> spots(1);
 shadow_map shadow;
 
+map<string, float> orbit_factors;
 double cursor_x = 0.0;
 double cursor_y = 0.0;
-string selected = "earth";
-
 float rotAngle = 0.0f;
 bool destroy_solar_system = false;
-bool shadow_plane = false;
+bool demo_shadow = false;
 
-effect ship_eff;
-array<mesh, 7> enterprise;
-array<mesh, 2> motions;
-array<texture, 2> motions_textures;
-texture enterprise_texture;
-mesh test_plane;
-
-bool initialise() {
-	// *********************************
-	// Set input mode - hide the cursor
-	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	// Capture initial mouse position
-	glfwGetCursorPos(renderer::get_window(), &cursor_x, &cursor_y);
-	// *********************************
-	return true;
-}
-
+// Define planetary orbits
 void orbit(mesh &m, mesh &sun, string name, float delta_time)
 {
+	// Get centre of orbit, current position of orbiting
+	// body and it's radius
 	vec3 rotCenter = sun.get_transform().position;
 	float current_x, current_z, rotAngle, radius;
 	current_x = m.get_transform().position.x;
@@ -66,194 +58,111 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	{
 		return;
 	}
-	// Correct for quadrants of xz axes
+	// Calculate orbit angle, correctint for quadrants of xz axes
 	if (current_x < 0)
 	{
 		if (current_z < 0)
-		{
 			rotAngle = atan(current_z / current_x) - radians(180.0f);
-		}
 		else
-
-		{
 			rotAngle = atan(current_z / current_x) + radians(180.0f);
-		}
 	}
 	else
-	{
 		rotAngle = atan(current_z / current_x);
-	}
-	// Increment rotAngle to calcualte next position
-	rotAngle = rotAngle * (180.0f / pi<float>());
-	rotAngle += 0.5f;
-	rotAngle = rotAngle + orbit_factors[name];
-	rotAngle = radians(rotAngle);
+	// Increment rotAngle to calcualte next position taking into
+	// account the planets unique orbit speed
+	rotAngle = radians(rotAngle * (180.0f / pi<float>()) + 0.5f + orbit_factors[name]);
 	float factor = 1.0f / (radius * radius);
-	cout << name << " " << radius << " " << rotAngle << endl;
-	cout << "(" << m.get_transform().position.x << ", " << m.get_transform().position.z << endl;
 	// Correct for full rotation
 	if (rotAngle > radians(360.0f))
-	{
 		rotAngle = 0.0f;
-	}
 	// Calculate new position
 	float new_x = rotCenter.x + (radius * cosf(rotAngle));
 	float new_z = rotCenter.z + (radius * sinf(rotAngle));
 	vec3 newPos = vec3(new_x, 0, new_z);
 	m.get_transform().position = newPos;
+	// Spin planet
 	m.get_transform().rotate(vec3(0.0f, 2 * delta_time, 0.0f));
+	// If the black hole has formed then move the planet closer
+	// and shrink
 	if (destroy_solar_system == true && sun.get_transform().scale == vec3(0.0f))
 	{
 		m.get_transform().translate(-factor * m.get_transform().position);
 		m.get_transform().scale -= (factor * m.get_transform().scale);
 	}
-
 }
 
+// Shrink sun and form a black hole
 void black_hole(float delta_time)
 {
-	if (meshes["sun"].get_transform().scale != vec3(0.0f))
+	// If the sun hasn't disappeared yet, shrink it to 0
+	if (solar_objects["sun"].get_transform().scale != vec3(0.0f))
 	{
-		auto &m = meshes["sun"];
+		auto &m = solar_objects["sun"];
 		vec3 sun_size = m.get_transform().scale;
 		m.get_transform().scale = max(sun_size - vec3(delta_time, delta_time, delta_time), 0.0f);
 	}
+	// Else, grow the black hole to scale 20
 	else
 	{
-		auto &m = meshes["black_hole"];
+		auto &m = solar_objects["black_hole"];
 		vec3 black_hole_size = m.get_transform().scale;
 		m.get_transform().scale = min(black_hole_size + vec3(delta_time, delta_time, delta_time), 20.0f);
 	}
 }
 
+void check_selected()
+{
+	// If mouse button pressed get ray and check for intersection
+	if (glfwGetMouseButton(renderer::get_window(), GLFW_MOUSE_BUTTON_LEFT))
+	{
+		// Get the mouse position
+		double mouse_x;
+		double mouse_y;
+		glfwGetCursorPos(renderer::get_window(), &mouse_x, &mouse_y);
+		double xx = 2 * mouse_x / renderer::get_screen_width() - 1.0f;
+		double yy = 2 * (renderer::get_screen_height() - mouse_y) / renderer::get_screen_height() - 1.0f;
+		// Origin and direction of the ray
+		vec4 origin;
+		vec4 direction;
+		// Convert mouse position to ray
+		vec4 ray_start_screen(xx, yy, -1, 1);
+		vec4 ray_end_screen(xx, yy, 0, 1);
+		// Get inverse of PV
+		auto P = tcam.get_projection();
+		auto V = tcam.get_view();
+		auto inverse_matrix = inverse(P * V);
+		// Calculate origin and direction
+		vec4 ray_start_world = inverse_matrix * ray_start_screen;
+		ray_start_world = ray_start_world / ray_start_world.w;
+		vec4 ray_end_world = inverse_matrix * ray_end_screen;
+		ray_end_world = ray_end_world / ray_end_world.w;
+		direction = normalize(ray_end_world - ray_start_world);
+		origin = ray_start_world;
+		// Check all the solar_objects for intersection
+		for (auto &m : solar_objects)
+		{
+			float distance = 0.0f;
+			if (test_ray_oobb(origin, direction, m.second.get_minimal(), m.second.get_maximal(),
+				m.second.get_transform().get_transform_matrix(), distance))
+			{
+				if (m.first == "sun")
+					destroy_solar_system = true;
+			}
+		}
+	}
+}
+
 bool load_content() {
-	// Meshes
-	meshes["earth"] = mesh(geometry("models/Earth.obj"));
-	meshes["clouds"] = mesh(geometry("models/Earth.obj"));
-	meshes["sun"] = mesh(geometry("models/Earth.obj"));
-	meshes["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
-	meshes["mercury"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	meshes["venus"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	meshes["mars"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	
-	// Create shadow map- use screen size
-	shadow = shadow_map(renderer::get_screen_width(), renderer::get_screen_height());
-	// Skybox
-	stars = mesh(geometry_builder::create_box());
-	stars.get_transform().scale = vec3(1000.0f);
+	// SOLAR OBJECT MESHES
+	solar_objects["sun"] = mesh(geometry("models/Earth.obj"));
+	solar_objects["mercury"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+	solar_objects["venus"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+	solar_objects["earth"] = mesh(geometry("models/Earth.obj"));
+	solar_objects["mars"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+	solar_objects["clouds"] = mesh(geometry("models/Earth.obj"));
+	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
 
-	// Transform objects
-	meshes["earth"].get_transform().scale = vec3(1.0f);
-	meshes["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
-	meshes["earth"].get_transform().rotate(vec3(0.0f, radians(23.44), 0.0f));
-	meshes["clouds"].get_transform().scale = vec3(1.005f, 1.005f, 1.005f);
-	meshes["clouds"].get_transform().position = meshes["earth"].get_transform().position;
-	meshes["sun"].get_transform().scale = vec3(5.0f, 5.0f, 5.0f);
-	meshes["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
-	meshes["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
-	meshes["venus"].get_transform().scale = vec3(2.0f);
-	meshes["venus"].get_transform().translate(0.72f * meshes["earth"].get_transform().position);
-	meshes["venus"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
-	meshes["mercury"].get_transform().scale = 0.3f * meshes["venus"].get_transform().scale;
-	meshes["mercury"].get_transform().translate(0.39f * meshes["earth"].get_transform().position);
-	meshes["mercury"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
-	meshes["mars"].get_transform().scale = 0.53f * meshes["venus"].get_transform().scale;
-	meshes["mars"].get_transform().translate(1.52f * meshes["earth"].get_transform().position);
-	meshes["mars"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
-
-	// Set orbit factors
-	orbit_factors["mercury"] = 1.5f;
-	orbit_factors["venus"] = 1.1f;
-	orbit_factors["earth"] = 0.0f;
-	orbit_factors["clouds"] = 0.0f;
-	orbit_factors["mars"] = -0.235f;
-
-	// Set materials
-	material mat;
-	mat.set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_shininess(25.0f);
-	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	meshes["earth"].set_material(mat);
-	meshes["clouds"].set_material(mat);
-	meshes["venus"].set_material(mat);
-	meshes["mars"].set_material(mat);
-
-	mat.set_specular(vec4(0.5f, 0.5f, 0.5f, 1.0f));
-	mat.set_shininess(100.0f);
-	meshes["mercury"].set_material(mat);
-
-	mat.set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_shininess(25.0f);
-	meshes["sun"].set_material(mat);
-
-	mat.set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-	meshes["black_hole"].set_material(mat);
-
-	// Load textures
-	textures["earthTex"] = texture("textures/Earth_tex.tga");
-	textures["sunTex"] = texture("textures/sun_tex.jpg");
-	textures["cloudsTex"] = texture("textures/clouds.png");
-	textures["black_holeTex"] = texture("textures/blackhole.jpg");
-	
-	textures["alienTex"] = texture("textures/white.jpg");
-	
-	textures["mercuryTex"] = texture("textures/mercury_tex.jpg");
-	textures["venusTex"] = texture("textures/venus.jpg");
-	textures["marsTex"] = texture("textures/mars.jpg");
-	
-	// Create skybox
-	array<string, 6> filenames = { "textures/stars_ft.jpg", "textures/stars_bk.jpg", "textures/stars_up.jpg", "textures/stars_dn.jpg", "textures/stars_lt.jpg", "textures/stars_rt.jpg" };
-	cube_map = cubemap(filenames);
-
-	// Set point light values, Position
-	points[0].move(vec3(0.0f, 1.0f, 0.0f));
-	// Light colour white
-	points[0].set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	// Set range to 20
-	points[0].set_range(1000.0f);
-
-	// Set spot light values
-	// Selection light (red)
-	spots[0].set_position(vec3(90.0f, 40.0f, 60.0f));
-	spots[0].set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	spots[0].set_direction(normalize(vec3(-1.0f, -1.0f, 0.0f)));
-	spots[0].set_range(1000.0f);
-	spots[0].set_power(0.1f);
-	
-	// Load in shaders for planets
-	eff.add_shader("shaders/simple_texture.vert", GL_VERTEX_SHADER);
-	vector<string> eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag"};
-	eff.add_shader(eff_frag_shaders, GL_FRAGMENT_SHADER);
-	// Build effect
-	eff.build();
-	
-	// Load in shaders for skybox
-	sbeff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
-	sbeff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
-	sbeff.build();
-	
-	// Load in shaders for clouds
-	ceff.add_shader("shaders/cloud_texture.vert", GL_VERTEX_SHADER);
-	vector<string> ceff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag" };
-	ceff.add_shader(ceff_frag_shaders, GL_FRAGMENT_SHADER);
-	ceff.build();
-	
-	// Load in shaders for sun
-	suneff.add_shader("shaders/sun_texture.vert", GL_VERTEX_SHADER);
-	vector<string> seff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag"};
-	suneff.add_shader(seff_frag_shaders, GL_FRAGMENT_SHADER);
-	suneff.build();
-
-	// Load is shadow shades
-	shadow_eff.add_shader("shaders/spot.vert", GL_VERTEX_SHADER);
-	shadow_eff.add_shader("shaders/spot.frag", GL_FRAGMENT_SHADER);
-	shadow_eff.build();
-
-	// *********************************
-	// Create Three Identical Box Meshes
+	// ENTERPRISE MESHES
 	// Saucer section
 	enterprise[0] = mesh(geometry_builder::create_cylinder(20, 50, vec3(10.0f, 1.0f, 10.0f)));
 	// Connection
@@ -265,11 +174,34 @@ bool load_content() {
 	enterprise[4] = mesh(geometry_builder::create_cylinder(20, 20, vec3(1.0f, 10.0, 1.0f)));
 	enterprise[5] = mesh(geometry_builder::create_box(vec3(0.1f, 5.0f, 1.0f)));
 	enterprise[6] = mesh(geometry_builder::create_box(vec3(0.1f, 5.0f, 1.0f)));
-
-	// Motions
+	// Nacelle light domes
 	motions[0] = mesh(geometry_builder::create_sphere(20, 20, vec3(0.5f)));
 	motions[1] = mesh(geometry_builder::create_sphere(20, 20, vec3(0.5f)));
 
+	// DEMO SHADOW PLANE
+	shadow_plane = mesh(geometry_builder::create_plane());
+
+	// TRANSFORM MESHES
+	// Solar objects
+	solar_objects["sun"].get_transform().scale = vec3(5.0f, 5.0f, 5.0f);
+	solar_objects["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
+	solar_objects["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
+	solar_objects["earth"].get_transform().scale = vec3(1.0f);
+	solar_objects["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
+	solar_objects["earth"].get_transform().rotate(vec3(0.0f, radians(23.44), 0.0f));
+	solar_objects["mercury"].get_transform().scale = 0.3f * solar_objects["venus"].get_transform().scale;
+	solar_objects["mercury"].get_transform().translate(0.39f * solar_objects["earth"].get_transform().position);
+	solar_objects["mercury"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	solar_objects["venus"].get_transform().scale = vec3(2.0f);
+	solar_objects["venus"].get_transform().translate(0.72f * solar_objects["earth"].get_transform().position);
+	solar_objects["venus"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	solar_objects["mars"].get_transform().scale = 0.53f * solar_objects["venus"].get_transform().scale;
+	solar_objects["mars"].get_transform().translate(1.52f * solar_objects["earth"].get_transform().position);
+	solar_objects["mars"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	solar_objects["clouds"].get_transform().scale = vec3(1.005f, 1.005f, 1.005f);
+	solar_objects["clouds"].get_transform().position = solar_objects["earth"].get_transform().position;
+
+	// Enterprise (transform hierarchy in place)
 	// Saucer section
 	enterprise[0].get_transform().position = vec3(50.0f, 10.0f, 50.0f);
 	// Connection
@@ -286,21 +218,46 @@ bool load_content() {
 	enterprise[5].get_transform().rotate(vec3(0.0f, 0.0f, half_pi<float>() / 3.0f));
 	enterprise[6].get_transform().rotate(vec3(0.0f, 0.0f, -pi<float>() / 3.0f));
 	enterprise[6].get_transform().position = vec3(2.5f, -1.5f, 0.0f);
-
+	// Nacelle light domes
 	motions[0].get_transform().position = enterprise[0].get_transform().position - vec3(3.0f, -0.5f, 6.75f);
 	motions[1].get_transform().position = enterprise[0].get_transform().position - vec3(-3.0f, -0.5f, 6.75f);
 
-	// Load texture
-	enterprise_texture = texture("textures/squares.jpg");
+	// Demo shadow plane
+	shadow_plane.get_transform().position = vec3(40.0f, -15.0f, 0.0f);
+	shadow_plane.get_transform().scale = vec3(0.5f, 1.0f, 1.0f);
 
-	motions_textures[0] = texture("textures/white.jpg");
-	motions_textures[1] = texture("textures/white.jpg");
+	// SET MATERIALS
+	// Solar objects
+	material mat;
+	mat.set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	mat.set_shininess(25.0f);
+	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	solar_objects["earth"].set_material(mat);
+	solar_objects["clouds"].set_material(mat);
+	solar_objects["venus"].set_material(mat);
+	solar_objects["mars"].set_material(mat);
+
+	mat.set_specular(vec4(0.5f, 0.5f, 0.5f, 1.0f));
+	mat.set_shininess(100.0f);
+	solar_objects["mercury"].set_material(mat);
+
+	mat.set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	mat.set_shininess(25.0f);
+	solar_objects["sun"].set_material(mat);
+
+	mat.set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	solar_objects["black_hole"].set_material(mat);
+
+	// Enterprise
 	for (int i = 0; i < enterprise.size(); i++)
 	{
-		enterprise[i].get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-		enterprise[i].get_material().set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-		enterprise[i].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-		enterprise[i].get_material().set_shininess(25.0f);
+		enterprise[i].get_material().set_emissive(vec4(0.2f, 0.2f, 0.2f, 1.0f));
+		enterprise[i].get_material().set_diffuse(vec4(0.8f, 0.8f, 0.8f, 1.0f));
+		enterprise[i].get_material().set_specular(vec4(0.774597f, 0.774597f, 0.774597f, 1.0f));
+		enterprise[i].get_material().set_shininess(0.6f * 128);
 	}
 	for (int i = 0; i < motions.size(); i++)
 	{
@@ -309,16 +266,87 @@ bool load_content() {
 		motions[i].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 		motions[i].get_material().set_shininess(25.0f);
 	}
-	test_plane = mesh(geometry_builder::create_plane());
-	test_plane.get_transform().position = vec3(40.0f, -15.0f, 0.0f);
-	test_plane.get_transform().scale = vec3(0.5f, 1.0f, 1.0f);
-	//test_plane.get_transform().position = vec3(35.0f, 5.0f, 35.0f);
-	//test_plane.get_transform().rotate(vec3( 0.0f, 0.0f,-half_pi<float>()));
-	//test_plane.get_transform().scale = vec3(0.25f);
-	test_plane.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-	test_plane.get_material().set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	test_plane.get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 0.0f));
-	test_plane.get_material().set_shininess(25.0f);
+
+	// Demo shadow plane
+	shadow_plane.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	shadow_plane.get_material().set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	shadow_plane.get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 0.0f));
+	shadow_plane.get_material().set_shininess(25.0f);
+
+	// OTHER PROPERTIES
+	// Set orbit factors
+	orbit_factors["mercury"] = 1.5f;
+	orbit_factors["venus"] = 1.1f;
+	orbit_factors["earth"] = 0.0f;
+	orbit_factors["clouds"] = 0.0f;
+	orbit_factors["mars"] = -0.235f;
+
+	// LOAD TEXTURES
+	// Solar objects
+	textures["sunTex"] = texture("textures/sun_tex.jpg");
+	textures["mercuryTex"] = texture("textures/mercury_tex.jpg");
+	textures["venusTex"] = texture("textures/venus.jpg");
+	textures["earthTex"] = texture("textures/Earth_tex.tga");
+	textures["marsTex"] = texture("textures/mars.jpg");
+	textures["cloudsTex"] = texture("textures/clouds.png");
+	textures["black_holeTex"] = texture("textures/blackhole.jpg");
+	textures["planeTex"] = texture("textures/white.jpg");
+
+	// Enterprise
+	// Load texture
+	enterprise_texture = texture("textures/squares.jpg");
+	motions_textures[0] = texture("textures/white.jpg");
+	motions_textures[1] = texture("textures/white.jpg");
+
+	// LOAD NORMAL MAPS
+	normal_maps["sun"] = texture("textures/sun_normal_map.png");
+	normal_maps["mercury"] = texture("textures/mercury_normal_map.png");
+	normal_maps["venus"] = texture("textures/venus_normal_map.png");
+	normal_maps["earth"] = texture("textures/earth_normal_map.png");
+	normal_maps["mars"] = texture("textures/mars_normal_map.png");
+	normal_maps["clouds"] = texture("textures/clouds_normal_map.png");
+
+	// SKYBOX
+	stars = mesh(geometry_builder::create_box());
+	stars.get_transform().scale = vec3(1000.0f);
+	array<string, 6> filenames = { "textures/stars_ft.jpg", "textures/stars_bk.jpg", "textures/stars_up.jpg", "textures/stars_dn.jpg", "textures/stars_lt.jpg", "textures/stars_rt.jpg" };
+	cube_map = cubemap(filenames);
+
+	// LIGHTS
+	// Set point light values, Position
+	points[0].move(vec3(0.0f, 1.0f, 0.0f));
+	// Light colour white
+	points[0].set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	// Set range to 20
+	points[0].set_range(1000.0f);
+
+	// Set spot light values
+	// Yellow light
+	spots[0].set_position(vec3(90.0f, 40.0f, 60.0f));
+	spots[0].set_light_colour(vec4(1.0f, 1.0f, 0.0f, 1.0f));
+	spots[0].set_direction(normalize(vec3(-1.0f, -1.0f, 0.0f)));
+	spots[0].set_range(100.0f);
+	spots[0].set_power(0.1f);
+
+	// SHADERS
+	// Load in shaders for planets
+	planet_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
+	vector<string> planet_eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_spot.frag" };
+	planet_eff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	// Build effect
+	planet_eff.build();
+	
+	// Load in shaders for clouds
+	ceff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
+	vector<string> ceff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag"};
+	ceff.add_shader(ceff_frag_shaders, GL_FRAGMENT_SHADER);
+	ceff.build();
+	
+	// Load in shaders for sun
+	suneff.add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
+	suneff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	suneff.build();
+
 	// Load in shaders for enterprise
 	ship_eff.add_shader("shaders/enterprise.vert", GL_VERTEX_SHADER);
 	vector<string> ship_eff_frag_shaders{ "shaders/enterprise.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag" };
@@ -326,16 +354,25 @@ bool load_content() {
 	// Build effect
 	ship_eff.build();
 
+	// Load in shaders for skybox
+	sbeff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
+	sbeff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
+	sbeff.build();
+
+	// Load is shadow shades
+	shadow_eff.add_shader("shaders/spot.vert", GL_VERTEX_SHADER);
+	shadow_eff.add_shader("shaders/spot.frag", GL_FRAGMENT_SHADER);
+	shadow_eff.build();
+	
+	// SHADOW MAP
+	shadow = shadow_map(renderer::get_screen_width(), renderer::get_screen_height());
+
+	// CAMERAS
 	// Set target camera properties
 	tcam.set_position(vec3(60.0f, 10.0f, 60.0f));
 	tcam.set_target(vec3(0.0f, 0.0f, 0.0f));
 	tcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
 
-	/*
-	//TESTING
-	tcam.set_position(vec3(10.0f, 20.0f, 10.0f));
-	tcam.set_target(meshes["alien"].get_transform().position);
-	*/
 	// Set free camera properties
 	fcam.set_position(vec3(50.0f, 10.0f, 50.0f));
 	fcam.set_target(vec3(0.0f, 0.0f, 0.0f));
@@ -344,7 +381,7 @@ bool load_content() {
 	// Set chase camera properties
 	ccam.set_pos_offset(vec3(0.0f, 2.0f, 10.0f));
 	ccam.set_springiness(0.5f);
-	ccam.move(meshes["mercury"].get_transform().position, eulerAngles(meshes["mercury"].get_transform().orientation));
+	ccam.move(solar_objects["mercury"].get_transform().position, eulerAngles(solar_objects["mercury"].get_transform().orientation));
 	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
 	return true;
 }
@@ -353,43 +390,31 @@ void chase_camera_update(float delta_time)
 {
 	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	// The target object for chase camera
-	static mesh &target_mesh = meshes["mercury"];
-	// The ratio of pixels to rotation - remember the fov
+	static mesh &target_mesh = solar_objects["earth"];
+	// The ratio of pixels to rotation
 	static const float sh = static_cast<float>(renderer::get_screen_height());
 	static const float sw = static_cast<float>(renderer::get_screen_height());
 	static const double ratio_width = quarter_pi<float>() / sw;
 	static const double ratio_height = (quarter_pi<float>() * (sh / sw)) / sh;
-
 	double current_x;
 	double current_y;
-	// *********************************
 	// Get the current cursor position
 	glfwGetCursorPos(renderer::get_window(), &current_x, &current_y);
-
 	// Calculate delta of cursor positions from last frame
 	double delta_x = current_x - cursor_x;
 	double delta_y = current_y - cursor_y;
-
 	// Multiply deltas by ratios - gets actual change in orientation
 	delta_x = delta_x * ratio_width;
 	delta_y = delta_y * ratio_height;
-
-	// Rotate cameras by delta
-	// x - delta_y
-	// y - delta_x
-	// z - 0
+	// Rotate camera by delta
 	ccam.rotate(vec3(delta_y, delta_x, 0.0f));
-
 	// Move camera - update target position and rotation
 	ccam.move(target_mesh.get_transform().position, vec3(0.0f, 0.0f, 0.0f));
-
 	// Update the camera
 	ccam.update(delta_time);
-
 	// Update cursor pos
 	cursor_x = current_x;
 	cursor_y = current_y;
-
 	// Set skybox position to camera position (camera in centre of skybox)
 	stars.get_transform().position = ccam.get_position();
 }
@@ -397,43 +422,23 @@ void chase_camera_update(float delta_time)
 void free_camera_update(float delta_time)
 {
 	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	// Update the camera
-	// Use keyboard to change camera location
-	// 1 - (50, 10, 50)
-	if (glfwGetKey(renderer::get_window(), '1')) {
-		fcam.set_position(vec3(50.0f, 10.0f, 50.0f));
-	}
-	// 2 - (10, 60, 10)
-	if (glfwGetKey(renderer::get_window(), '2')) {
-		fcam.set_position(vec3(10.0f, 60.0f, 10.0f));
-	}
-	// The ratio of pixels to rotation - remember the fov
-	static double ratio_width = quarter_pi<float>() / static_cast<float>(renderer::get_screen_width());
-	static double ratio_height =
-		(quarter_pi<float>() *
-		(static_cast<float>(renderer::get_screen_height()) / static_cast<float>(renderer::get_screen_width()))) /
-		static_cast<float>(renderer::get_screen_height());
-
+	// The ratio of pixels to rotation
+	static const float sh = static_cast<float>(renderer::get_screen_height());
+	static const float sw = static_cast<float>(renderer::get_screen_height());
+	static const double ratio_width = quarter_pi<float>() / sw;
+	static const double ratio_height = (quarter_pi<float>() * (sh / sw)) / sh;
 	double current_x;
 	double current_y;
-	// *********************************
 	// Get the current cursor position
-	GLFWwindow* window = renderer::get_window();
-	glfwGetCursorPos(window, &current_x, &current_y);
-
+	glfwGetCursorPos(renderer::get_window(), &current_x, &current_y);
 	// Calculate delta of cursor positions from last frame
 	double delta_x = current_x - cursor_x;
 	double delta_y = current_y - cursor_y;
-
 	// Multiply deltas by ratios - gets actual change in orientation
 	delta_x = delta_x * ratio_width;
 	delta_y = delta_y * ratio_height;
-
 	// Rotate cameras by delta
-	// delta_y - x-axis rotation
-	// delta_x - y-axis rotation
 	fcam.rotate(delta_x, delta_y);
-
 	// Use keyboard to move the camera - WSAD
 	if (glfwGetKey(renderer::get_window(), 'W')) {
 		fcam.move(vec3(0.0f, 0.0f, 1.0f));
@@ -447,14 +452,11 @@ void free_camera_update(float delta_time)
 	if (glfwGetKey(renderer::get_window(), 'D')) {
 		fcam.move(vec3(1.0f, 0.0f, 0.0f));
 	}
-
 	// Update the camera
 	fcam.update(delta_time);
-
 	// Update cursor pos
 	cursor_x = current_x;
 	cursor_y = current_y;
-
 	// Set skybox position to camera position (camera in centre of skybox)
 	stars.get_transform().position = fcam.get_position();
 }
@@ -483,55 +485,12 @@ void target_camera_update(float delta_time)
 	tcam.update(delta_time);
 	// Set skybox position to camera position (camera in centre of skybox)
 	stars.get_transform().position = tcam.get_position();
-	// Get selected item
-
-	// If mouse button pressed get ray and check for intersection
-	if (glfwGetMouseButton(renderer::get_window(), GLFW_MOUSE_BUTTON_LEFT))
-	{
-		// Get the mouse position
-		double mouse_x;
-		double mouse_y;
-		glfwGetCursorPos(renderer::get_window(), &mouse_x, &mouse_y);
-		double xx = 2 * mouse_x / renderer::get_screen_width() - 1.0f;
-		double yy = 2 * (renderer::get_screen_height() - mouse_y) / renderer::get_screen_height() - 1.0f;
-
-		// Origin and direction of the ray
-		vec4 origin;
-		vec4 direction;
-
-		// Convert mouse position to ray
-		vec4 ray_start_screen(xx, yy, -1, 1);
-		vec4 ray_end_screen(xx, yy, 0, 1);
-
-		auto P = tcam.get_projection();
-		auto V = tcam.get_view();
-		auto inverse_matrix = inverse(P * V);
-
-		vec4 ray_start_world = inverse_matrix * ray_start_screen;
-		ray_start_world = ray_start_world / ray_start_world.w;
-		vec4 ray_end_world = inverse_matrix * ray_end_screen;
-		ray_end_world = ray_end_world / ray_end_world.w;
-
-		direction = normalize(ray_end_world - ray_start_world);
-		origin = ray_start_world;
-		// Check all the mehes for intersection
-		for (auto &m : meshes)
-		{
-			float distance = 0.0f;
-			if (test_ray_oobb(origin, direction, m.second.get_minimal(), m.second.get_maximal(),
-				m.second.get_transform().get_transform_matrix(), distance))
-			{
-				if (m.first == "sun")
-				{
-					destroy_solar_system = true;
-				}
-			}
-		}
-	}
+	// Check for selection
+	void check_selected();
 }
 
 bool update(float delta_time) {
-	// *** USER CONTROLS ***
+	// USER CONTROLS
 	// Camera controls
 	// c - switch to chase camera
 	if (glfwGetKey(renderer::get_window(), 'C'))
@@ -551,64 +510,57 @@ bool update(float delta_time) {
 		chase_camera_active = false;
 		free_camera_active = true;
 	}
+
+	// Shadow plane controls
 	if (glfwGetKey(renderer::get_window(), 'P'))
-	{
-		if (shadow_plane == false)
-			shadow_plane = true;
-		else
-			shadow_plane = false;
-	}
-	// *** MOTION ***
-	// All planets orbit "sun"
-	auto sun = meshes["sun"];
+		demo_shadow = true;
+	if (glfwGetKey(renderer::get_window(), 'O'))
+		demo_shadow = false;
+
+	// Check if solar system is to be destroyed
+	if (destroy_solar_system == true)
+		black_hole(delta_time);
+
+	// Enterprise controls
+	vec3 engage;
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_UP)) 
+		engage += vec3(0.0f, 0.0f, 1.0f);
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) 
+		engage += vec3(0.0f, 0.0f, -1.0f);
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_LEFT)) 
+		engage += vec3(-1.0f, 0.0f, 0.0f);
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_RIGHT)) 
+		engage += vec3(1.0f, 0.0f, 0.0f);
+	// Move enterprise
+	enterprise[0].get_transform().translate(engage);
+	motions[0].get_transform().translate(engage);
+	motions[1].get_transform().translate(engage);
+	// Spin nacelle domes
+	motions[0].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
+	motions[1].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
+
+	// ORBITS
+	// All planets orbit sun
+	auto sun = solar_objects["sun"];
 	// Control orbiting objects motion
-	for (auto &e : meshes)
+	for (auto &e : solar_objects)
 	{
 		auto &m = e.second;
 		// The sun and the black hole spin around the origin
 		if (e.first == "sun" || e.first == "black_hole")
-		{
 			m.get_transform().rotate(vec3(0.0f, -delta_time / 2.0f, 0.0f));
-		}
-		// The clouds rotate twice as fast as the Earth
+		// The clouds rotate faster than the Earth
 		else if (e.first == "clouds")
 		{
 			m.get_transform().rotate(vec3(0.0f, 2.0f * delta_time, 0.0f));
 			orbit(m, sun, e.first, delta_time);
 		}
-		// All planets simply orbit the sun/black hole
+		// All planets simply orbit the sun
 		else
-		{
 			orbit(m, sun, e.first, delta_time);
-		}
-	}
-	
-	// Use keyboard to move the camera - WSAD
-	vec3 engage;
-	if (glfwGetKey(renderer::get_window(), GLFW_KEY_UP)) {
-		engage += vec3(0.0f, 0.0f, 1.0f);
-	}
-	if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) {
-		engage += vec3(0.0f, 0.0f, -1.0f);
-	}
-	if (glfwGetKey(renderer::get_window(), GLFW_KEY_LEFT)) {
-		engage += vec3(-1.0f, 0.0f, 0.0f);
-	}
-	if (glfwGetKey(renderer::get_window(), GLFW_KEY_RIGHT)) {
-		engage += vec3(1.0f, 0.0f, 0.0f);
 	}
 
-	enterprise[0].get_transform().translate(engage);
-	motions[0].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
-	motions[1].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
-	motions[0].get_transform().translate(engage);
-	motions[1].get_transform().translate(engage);
-	// Check if solar system is to be destroyed
-	if (destroy_solar_system == true)
-	{
-		black_hole(delta_time);
-	}
-	// *** CAMERA MODE ***
+	// CAMERA MODES
 	// Update depending on active camera
 	if (chase_camera_active)
 	{
@@ -622,25 +574,22 @@ bool update(float delta_time) {
 	{
 		target_camera_update(delta_time);
 	}
-	cout << "FPS: " << 1.0f / delta_time << endl;
-	// *********************************
-	// Update the shadow map light_position from the spot light
+
+	// SHADOW MAP UPDATE
 	shadow.light_position = spots[0].get_position();
-	// do the same for light_dir property
 	shadow.light_dir = spots[0].get_direction();
-	// *********************************
-	// Press s to save
-	if (glfwGetKey(renderer::get_window(), 'S') == GLFW_PRESS)
-		shadow.buffer->save("test.png");
+
+	// FPS
+	cout << "FPS: " << 1.0f / delta_time << endl;
 	return true;
 }
 
-void render_clouds(mat4 P, mat4 V)
+void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 {
 	// Render clouds
 	renderer::bind(ceff);
 	// Create MVP matrix
-	auto M = meshes["clouds"].get_transform().get_transform_matrix();
+	auto M = solar_objects["clouds"].get_transform().get_transform_matrix();
 	auto MVP = P * V * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(ceff.get_uniform_location("MVP"),
@@ -656,69 +605,7 @@ void render_clouds(mat4 P, mat4 V)
 	glUniformMatrix3fv(ceff.get_uniform_location("N"),
 		1,
 		GL_FALSE,
-		value_ptr(meshes["clouds"].get_transform().get_normal_matrix()));
-	// Bind material
-	renderer::bind(meshes["clouds"].get_material(), "mat");
-	// Bind light
-	renderer::bind(points, "points");
-	// Bind and set textures
-	renderer::bind(textures["cloudsTex"], 0);
-	glUniform1i(ceff.get_uniform_location("tex"), 0);
-	// Set eye position- Get this from active camera
-	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
-	// Render mesh
-	renderer::render(meshes["clouds"]);
-}
-
-void render_sun(mat4 P, mat4 V)
-{
-	// Bind effect
-	renderer::bind(suneff);
-	// Create MVP matrix
-	auto M = meshes["sun"].get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
-	// Set MVP matrix uniform
-	glUniformMatrix4fv(suneff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
-	// Set N matrix uniform - remember - 3x3 matrix
-	glUniformMatrix3fv(suneff.get_uniform_location("N"),
-		1,
-		GL_FALSE,
-		value_ptr(meshes["sun"].get_transform().get_normal_matrix()));
-	// Bind material
-	renderer::bind(meshes["sun"].get_material(), "mat");
-	// Bind light
-	renderer::bind(points, "points");
-	// Bind and set textures
-	renderer::bind(textures["sunTex"], 0);
-	glUniform1i(suneff.get_uniform_location("tex"), 0);
-	// Set eye position- Get this from active camera
-	glUniform3fv(suneff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
-	// Render mesh
-	renderer::render(meshes["sun"]);
-}
-
-void render_planets(mesh m, string name, mat4 P, mat4 V, mat4 LightProjectionMat)
-{
-	// Bind effect
-	renderer::bind(eff);
-	// Create MVP matrix
-	auto M = m.get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
-	// Set MVP matrix uniform
-	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
-		1,
-		GL_FALSE,
-		value_ptr(MVP));
-	// Set M matrix uniform
-	glUniformMatrix4fv(eff.get_uniform_location("M"),
-		1,
-		GL_FALSE,
-		value_ptr(M));
-	// Set N matrix uniform - remember - 3x3 matrix
-	glUniformMatrix3fv(eff.get_uniform_location("N"),
-		1,
-		GL_FALSE,
-		value_ptr(m.get_transform().get_normal_matrix()));
+		value_ptr(solar_objects["clouds"].get_transform().get_normal_matrix()));
 	// *********************************
 	// Set lightMVP uniform, using:
 	//Model matrix from m
@@ -726,50 +613,30 @@ void render_planets(mesh m, string name, mat4 P, mat4 V, mat4 LightProjectionMat
 	// Multiply together with LightProjectionMat
 	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
 	// Set uniform
-	glUniformMatrix4fv(eff.get_uniform_location("lightMVP"),
+	glUniformMatrix4fv(ceff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
 		value_ptr(lightMVP));
 	// *********************************
 	// Bind material
-	renderer::bind(m.get_material(), "mat");
+	renderer::bind(solar_objects["clouds"].get_material(), "mat");
 	// Bind light
-	if (name != "sun")
-	{
-		renderer::bind(points, "points");
-		// Bind spot light
-		renderer::bind(spots[0], "spot");
-	}
+	renderer::bind(points, "points");
 	// Bind and set textures
-	renderer::bind(textures[name + "Tex"], 0);
-	glUniform1i(eff.get_uniform_location("tex"), 0);
+	renderer::bind(textures["cloudsTex"], 0);
+	glUniform1i(ceff.get_uniform_location("tex"), 0);
+	// Bind normal_map
+	renderer::bind(normal_maps["clouds"], 1);
+	// Set normal_map uniform
+	glUniform1i(ceff.get_uniform_location("normal_map"), 1);
 	// Set eye position- Get this from active camera
-	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
-	// Bind shadow map texture - use texture unit 1
-	renderer::bind(shadow.buffer->get_depth(), 1);
+	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
+	// Bind shadow map texture - use texture unit 2
+	renderer::bind(shadow.buffer->get_depth(), 2);
 	// Set the shadow_map uniform
-	glUniform1i(eff.get_uniform_location("shadow_map"), 1);
+	glUniform1i(ceff.get_uniform_location("shadow_map"), 2);
 	// Render mesh
-	renderer::render(m);
-}
-
-void render_skybox(mat4 P, mat4 V)
-{
-	// Disable depth test,depth mask,face culling
-	glDisable(GL_DEPTH_TEST);
-	glDepthMask(GL_FALSE);
-	glDisable(GL_CULL_FACE);
-	// Bind skybox effect
-	renderer::bind(sbeff);
-	// Calculate MVP for the skybox
-	auto MVP = P * V * stars.get_transform().get_transform_matrix();
-	glUniformMatrix4fv(sbeff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
-	renderer::bind(cube_map, 0);
-	glUniform1i(sbeff.get_uniform_location("cubemap"), 0);
-	renderer::render(stars);
-	glEnable(GL_DEPTH_TEST);
-	glDepthMask(GL_TRUE);
-	glEnable(GL_CULL_FACE);
+	renderer::render(solar_objects["clouds"]);
 }
 
 void create_shadow_map(mat4 &LightProjectionMat)
@@ -790,7 +657,7 @@ void create_shadow_map(mat4 &LightProjectionMat)
 
 	// Bind shader
 	renderer::bind(shadow_eff);
-	// Render meshes
+	// Render solar_objects
 	for (size_t i = 0; i < enterprise.size(); i++) {
 		// *********************************
 		// SET M to be the usual mesh  transform matrix
@@ -814,7 +681,7 @@ void create_shadow_map(mat4 &LightProjectionMat)
 													// Render mesh
 		renderer::render(enterprise[i]);
 	}
-	// Render meshes
+	// Render solar_objects
 	for (int i = 0; i < motions.size(); i++) {
 		auto m = motions[i];
 		// Create MVP matrix
@@ -832,7 +699,7 @@ void create_shadow_map(mat4 &LightProjectionMat)
 													// Render mesh
 		renderer::render(m);
 	}
-	for (auto &e : meshes) {
+	for (auto &e : solar_objects) {
 		auto m = e.second;
 		// Create MVP matrix
 		auto M = m.get_transform().get_transform_matrix();
@@ -858,6 +725,77 @@ void create_shadow_map(mat4 &LightProjectionMat)
 
 }
 
+void render_skybox(mat4 P, mat4 V)
+{
+	// Disable depth test,depth mask,face culling
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glDisable(GL_CULL_FACE);
+	// Bind skybox effect
+	renderer::bind(sbeff);
+	// Calculate MVP for the skybox
+	auto MVP = P * V * stars.get_transform().get_transform_matrix();
+	glUniformMatrix4fv(sbeff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	renderer::bind(cube_map, 0);
+	glUniform1i(sbeff.get_uniform_location("cubemap"), 0);
+	renderer::render(stars);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_CULL_FACE);
+}
+
+void render_solar_objects(effect eff, mesh m, string name, mat4 P, mat4 V, mat4 LightProjectionMat, vec3 cam_pos)
+{
+	// Bind effect
+	renderer::bind(eff);
+	// Create MVP matrix
+	auto M = m.get_transform().get_transform_matrix();
+	auto MVP = P * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
+		1,
+		GL_FALSE,
+		value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("M"),
+		1,
+		GL_FALSE,
+		value_ptr(M));
+	// Set N matrix uniform - remember - 3x3 matrix
+	glUniformMatrix3fv(eff.get_uniform_location("N"),
+		1,
+		GL_FALSE,
+		value_ptr(m.get_transform().get_normal_matrix()));
+	// Set lightMVP uniform
+	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
+	// Set uniform
+	glUniformMatrix4fv(eff.get_uniform_location("lightMVP"),
+		1,
+		GL_FALSE,
+		value_ptr(lightMVP));
+	// Bind material
+	renderer::bind(m.get_material(), "mat");
+	// Bind light
+	renderer::bind(points, "points");
+	// Bind spot light
+	renderer::bind(spots, "spots");
+	// Bind and set textures
+	renderer::bind(textures[name + "Tex"], 0);
+	glUniform1i(eff.get_uniform_location("tex"), 0);
+	// Bind normal_map
+	renderer::bind(normal_maps[name], 1);
+	// Set normal_map uniform
+	glUniform1i(eff.get_uniform_location("normal_map"), 1);
+	// Set eye position- Get this from active camera
+	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind shadow map texture - use texture unit 2
+	renderer::bind(shadow.buffer->get_depth(), 2);
+	// Set the shadow_map uniform
+	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
+	// Render mesh
+	renderer::render(m);
+}
+
 void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 {
 	// Super effecient render loop, notice the things we only have to do once, rather than in a loop
@@ -870,7 +808,7 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	// Find the lcoation for the MVP uniform
 	const auto loc = ship_eff.get_uniform_location("MVP");
 
-	// Render meshes
+	// Render solar_objects
 	for (size_t i = 0; i < enterprise.size(); i++) {
 		// *********************************
 		// SET M to be the usual mesh  transform matrix
@@ -902,10 +840,12 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 			value_ptr(lightMVP));
 		// Bind material
 		renderer::bind(enterprise[i].get_material(), "mat");
+		// Bind directional light
+		renderer::bind(directional, "directional");
 		// Bind point light
-		renderer::bind(points[0], "point");
+		renderer::bind(points, "points");
 		// Bind spot light
-		renderer::bind(spots[0], "spot");
+		renderer::bind(spots, "spots");
 		// Bind texture to renderer
 		renderer::bind(enterprise_texture, 0);
 		// Set eye position
@@ -942,9 +882,9 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		// Bind material
 		renderer::bind(motions[i].get_material(), "mat");
 		// Bind point light
-		renderer::bind(points[0], "point");
+		renderer::bind(points, "points");
 		// Bind spot light
-		renderer::bind(spots[0], "spot");
+		renderer::bind(spots, "spost");
 		renderer::bind(motions_textures[i], 0);
 		// Set eye position
 		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
@@ -961,12 +901,12 @@ void render_shadow_plane(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	// Render floor
 	const auto PV = P * V;
 
-	glUniformMatrix4fv(ship_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(PV * test_plane.get_transform().get_transform_matrix()));
+	glUniformMatrix4fv(ship_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(PV * shadow_plane.get_transform().get_transform_matrix()));
 	// Set M matrix uniform
-	glUniformMatrix4fv(ship_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(test_plane.get_transform().get_transform_matrix()));
+	glUniformMatrix4fv(ship_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(shadow_plane.get_transform().get_transform_matrix()));
 	// Set N matrix uniform
 	glUniformMatrix3fv(ship_eff.get_uniform_location("N"), 1, GL_FALSE,
-		value_ptr(test_plane.get_transform().get_normal_matrix()));
+		value_ptr(shadow_plane.get_transform().get_normal_matrix()));
 	// *********************************
 	// Set lightMVP uniform, using:
 	//Model matrix from m
@@ -974,20 +914,20 @@ void render_shadow_plane(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	// viewmatrix from the shadow map
 
 	// Multiply together with LightProjectionMat
-	auto lightMVP = LightProjectionMat * shadow.get_view() * test_plane.get_transform().get_transform_matrix();
+	auto lightMVP = LightProjectionMat * shadow.get_view() * shadow_plane.get_transform().get_transform_matrix();
 	// Set uniform
 	glUniformMatrix4fv(ship_eff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
 		value_ptr(lightMVP));
 	// Bind material
-	renderer::bind(test_plane.get_material(), "mat");
+	renderer::bind(shadow_plane.get_material(), "mat");
 	// Bind point light
-	renderer::bind(points[0], "point");
+	renderer::bind(points, "points");
 	// Bind spot light
-	renderer::bind(spots[0], "spot");
+	renderer::bind(spots, "spost");
 	// Bind floor texture
-	renderer::bind(textures["alienTex"], 0);
+	renderer::bind(textures["planeTex"], 0);
 	// Set tex uniform
 	glUniform1i(ship_eff.get_uniform_location("tex"), 0);
 	// Set eye position
@@ -997,11 +937,10 @@ void render_shadow_plane(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	// Set the shadow_map uniform
 	glUniform1i(ship_eff.get_uniform_location("shadow_map"), 1);
 	// Render floor
-	renderer::render(test_plane);
+	renderer::render(shadow_plane);
 }
 
 bool render() {
-	// *********************************
 	// Get view and projection matrices from active camera
 	mat4 V;
 	mat4 P;
@@ -1026,16 +965,13 @@ bool render() {
 	}
 	// Render background
 	render_skybox(P, V);
+	// Render to shadow map
 	mat4 LightProjectionMat;
 	create_shadow_map(LightProjectionMat);
-	render_enterprise(LightProjectionMat, P, V, cam_pos);
-	if (shadow_plane == true)
-		render_shadow_plane(LightProjectionMat, P, V, cam_pos);
-
-	// Render objects
-	for (auto &e : meshes) {
-		// Skip meshes: with scale of 0 (sucked into black hole),
-		//				not to be rendered unless sun has been clicked
+	// Render solar objects
+	for (auto &e : solar_objects) {
+		// Skip those: with scale of 0 (sucked into black hole),
+		//		       not to be rendered unless sun has been clicked
 		if (e.first == "clouds" ||
 			e.second.get_transform().scale == vec3(0.0f) ||
 			(e.first == "black_hole" && destroy_solar_system == false))
@@ -1044,29 +980,26 @@ bool render() {
 		}
 		// Render sun
 		else if (e.first == "sun")
-		{
-			render_sun(P, V);
-		}
+			render_solar_objects(suneff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
 		// Render planets
 		else
-		{
-			render_planets(e.second, e.first, P, V, LightProjectionMat);
-		}
+			render_solar_objects(planet_eff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
 	}
-	
 	// Render clouds
-	render_clouds(P, V);
+	render_clouds(P, V, LightProjectionMat);
+	// Render the Enterprise
+	render_enterprise(LightProjectionMat, P, V, cam_pos);
+	// Render shadow plane if necessary
+	if (demo_shadow == true)
+		render_shadow_plane(LightProjectionMat, P, V, cam_pos);
 	return true;
 }
-
-
 
 void main() {
 	// Create application
 	app application("Graphics Coursework");
 	// Set load content, update and render methods
 	application.set_load_content(load_content);
-	application.set_initialise(initialise);
 	application.set_update(update);
 	application.set_render(render);
 	// Run application

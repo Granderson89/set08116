@@ -13,11 +13,11 @@ target_camera cam;
 bool load_content() {
   // *********************************
   // Load in model, models/teapot.obj
-	geometry geom("models/swords2_a.3ds");
+	geometry geom("models/teapot.obj");
 	m = mesh(geom);
 
   // Load in texture, textures/checker.png
-  tex = texture("textures/sw2ao_d.jpg");
+  tex = texture("textures/snow.jpg");
 
   // *********************************
   //m.get_transform().scale /= vec3(4.0f, 4.0f, 4.0f);

@@ -1,4 +1,3 @@
-
 // Spot light data
 #ifndef SPOT_LIGHT
 #define SPOT_LIGHT

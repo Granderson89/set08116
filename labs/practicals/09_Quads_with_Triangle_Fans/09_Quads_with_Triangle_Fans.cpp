@@ -18,18 +18,31 @@ bool load_content() {
   vector<vec3> positions{
       // *********************************
       // Add the position data for our triangle fan here
-	  vec3(-1.0f,1.0f,0.0f),
-	  vec3(-1.0f,-1.0f,0.0f),
-	  vec3(1.0f,-1.0f,0.0f),
-	  vec3(1.0f,1.0f,0.0f)
+	  vec3(0.0f, 0.0f, 0.0f)
       // *********************************
   };
   // Colours
-  vector<vec4> colours{vec4(1.0f, 0.0f, 0.0f, 1.0f), vec4(1.0f, 0.0f, 0.0f, 1.0f), vec4(1.0f, 0.0f, 0.0f, 1.0f),
-                       vec4(1.0f, 0.0f, 0.0f, 1.0f)};
+  vector<vec4> colours{vec4(1.0f, 0.0f, 0.0f, 1.0f)};
+  vector<vec3> normals{ vec3(1.0f, 0.0f, 0.0f) };
+  int slices = 5;
+  float radius = 5.0f;
+  float x2 = radius, z2 = 0;
+  const float theta = 2. * pi<float>() / slices;
+  float c = cos(theta);
+  float s = sin(theta);
+  for (int i = 0; i < slices; i++)
+  {
+	  positions.push_back(vec3(positions[0].x + x2, positions[0].y, positions[0].z + z2));
+	  colours.push_back(vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	  vec3 normal = normalize(vec3(positions[0].x + x2, positions[0].y, positions[0].z + z2));
+	  normals.push_back(normal);
+	  x2 = positions[0].x + (radius * c);
+	  z2 = positions[0].z + (radius * s);
+  }
   // Add to the geometry
   geom.add_buffer(positions, BUFFER_INDEXES::POSITION_BUFFER);
   geom.add_buffer(colours, BUFFER_INDEXES::COLOUR_BUFFER);
+  geom.add_buffer(normals, BUFFER_INDEXES::NORMAL_BUFFER);
 
   // Load in shaders
   eff.add_shader("shaders/basic.vert", GL_VERTEX_SHADER);

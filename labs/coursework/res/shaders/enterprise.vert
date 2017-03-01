@@ -23,11 +23,11 @@ layout (location = 1) out vec3 transformed_normal;
 // Outgoing texture coordinate
 layout (location = 2) out vec2 tex_coord_out;
 // Outgoing position in light space
-layout (location = 3) out vec4 vertex_light;
+layout (location = 3) out vec4 light_space_pos;
 
 void main()
 {
-    // Transform position into screen space
+	// Transform position into screen space
     gl_Position = MVP * vec4(position, 1.0);
     // Transform position into world space
     vertex_position = (M * vec4(position, 1.0)).xyz;
@@ -35,8 +35,6 @@ void main()
     transformed_normal = N * normal;
     // Pass through texture coordinate
     tex_coord_out = tex_coord_in;
-    // *********************************
     // Transform position into light space
-	vertex_light = lightMVP * vec4(position, 1.0);
-    // *********************************
+	light_space_pos = lightMVP * vec4(position, 1.0);
 }
