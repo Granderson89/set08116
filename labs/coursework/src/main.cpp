@@ -284,7 +284,6 @@ bool load_content() {
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
 	textures["planeTex"] = texture("textures/white.jpg");
 
-
 	// Enterprise
 	enterprise_texture = texture("textures/saucer.jpg");
 	motions_textures[0] = texture("textures/white.jpg");

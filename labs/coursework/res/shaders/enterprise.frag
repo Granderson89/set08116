@@ -78,6 +78,7 @@ layout(location = 0) out vec4 colour;
 
 void main() {
 	// Calculate shade factor
+		colour = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	float shade = calculate_shadow(shadow_map, light_space_pos);
 	// Calculate view direction
 	vec3 view_dir = normalize(eye_pos - vertex_position);

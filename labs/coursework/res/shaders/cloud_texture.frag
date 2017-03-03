@@ -57,6 +57,7 @@ layout(location = 0) out vec4 colour;
 
 void main() {
 	// Calculate view direction
+	colour = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	vec3 view_dir = normalize(eye_pos - vertex_position);
 	// Sample texture
 	vec4 tex_colour = texture(tex, tex_coord_out);
