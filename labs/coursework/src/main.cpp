@@ -10,20 +10,23 @@ map<string, mesh> solar_objects;
 cubemap cube_map;
 array<mesh, 7> enterprise;
 array<mesh, 2> motions;
-array<texture, 2> motions_textures;
 mesh shadow_plane;
+mesh rama;
 
 effect planet_eff;
 effect sbeff;
 effect ceff;
 effect suneff;
 effect ship_eff;
+effect inside_eff;
+effect outside_eff;
 effect shadow_eff;
 
 map<string, texture> textures;
 map<string, texture> normal_maps;
 texture blend_map;
 texture enterprise_texture;
+array<texture, 2> motions_textures;
 
 target_camera tcam;
 free_camera fcam;
@@ -34,6 +37,8 @@ bool free_camera_active = false;
 directional_light directional;
 vector<point_light> points(1);
 vector<spot_light> spots(1);
+vector<point_light> points_rama(1);
+vector<spot_light> spots_rama(2);
 shadow_map shadow;
 
 map<string, float> orbit_factors;
@@ -54,8 +59,9 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	current_z = m.get_transform().position.z;
 	radius = distance(m.get_transform().position, rotCenter);
 	// If planet has fallen into black hole, leave it there
-	if (radius < 0.2f)
+	if (radius < 0.3f)
 	{
+		m.get_transform().scale = vec3(0.0f);
 		return;
 	}
 	// Calculate orbit angle, correctint for quadrants of xz axes
@@ -71,7 +77,6 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	// Increment rotAngle to calcualte next position taking into
 	// account the planets unique orbit speed
 	rotAngle = radians(rotAngle * (180.0f / pi<float>()) + 0.5f + orbit_factors[name]);
-	float factor = 1.0f / (radius * radius);
 	// Correct for full rotation
 	if (rotAngle > radians(360.0f))
 		rotAngle = 0.0f;
@@ -81,11 +86,12 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	vec3 newPos = vec3(new_x, 0, new_z);
 	m.get_transform().position = newPos;
 	// Spin planet
-	m.get_transform().rotate(vec3(0.0f, 2 * delta_time, 0.0f));
+	m.get_transform().rotate(vec3(0.0f, 0.0f, 2 * delta_time));
 	// If the black hole has formed then move the planet closer
 	// and shrink
 	if (destroy_solar_system == true && sun.get_transform().scale == vec3(0.0f))
 	{
+		float factor = 1.0f / (radius * radius);
 		m.get_transform().translate(-factor * m.get_transform().position);
 		m.get_transform().scale -= (factor * m.get_transform().scale);
 	}
@@ -110,61 +116,19 @@ void black_hole(float delta_time)
 	}
 }
 
-void check_selected()
-{
-	// If mouse button pressed get ray and check for intersection
-	if (glfwGetMouseButton(renderer::get_window(), GLFW_MOUSE_BUTTON_LEFT))
-	{
-		// Get the mouse position
-		double mouse_x;
-		double mouse_y;
-		glfwGetCursorPos(renderer::get_window(), &mouse_x, &mouse_y);
-		double xx = 2 * mouse_x / renderer::get_screen_width() - 1.0f;
-		double yy = 2 * (renderer::get_screen_height() - mouse_y) / renderer::get_screen_height() - 1.0f;
-		// Origin and direction of the ray
-		vec4 origin;
-		vec4 direction;
-		// Convert mouse position to ray
-		vec4 ray_start_screen(xx, yy, -1, 1);
-		vec4 ray_end_screen(xx, yy, 0, 1);
-		// Get inverse of PV
-		auto P = tcam.get_projection();
-		auto V = tcam.get_view();
-		auto inverse_matrix = inverse(P * V);
-		// Calculate origin and direction
-		vec4 ray_start_world = inverse_matrix * ray_start_screen;
-		ray_start_world = ray_start_world / ray_start_world.w;
-		vec4 ray_end_world = inverse_matrix * ray_end_screen;
-		ray_end_world = ray_end_world / ray_end_world.w;
-		direction = normalize(ray_end_world - ray_start_world);
-		origin = ray_start_world;
-		// Check all the solar_objects for intersection
-		for (auto &m : solar_objects)
-		{
-			float distance = 0.0f;
-			if (test_ray_oobb(origin, direction, m.second.get_minimal(), m.second.get_maximal(),
-				m.second.get_transform().get_transform_matrix(), distance))
-			{
-				if (m.first == "sun")
-					destroy_solar_system = true;
-			}
-		}
-	}
-}
-
 bool load_content() {
 	// SOLAR OBJECT MESHES
-	solar_objects["sun"] = mesh(geometry("models/Earth.obj"));
+	solar_objects["sun"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
 	solar_objects["mercury"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
 	solar_objects["venus"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["earth"] = mesh(geometry("models/Earth.obj"));
+	solar_objects["earth"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
 	solar_objects["mars"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["clouds"] = mesh(geometry("models/Earth.obj"));
+	solar_objects["clouds"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
 	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
 
 	// ENTERPRISE MESHES
 	// Saucer section
-	enterprise[0] = mesh(geometry_builder::create_cylinder(20, 50, vec3(10.0f, 1.0f, 10.0f)));
+	enterprise[0] = mesh(geometry_builder::create_cylinder(100, 100));
 	// Connection
 	enterprise[1] = mesh(geometry_builder::create_box(vec3(1.0f, 4.0f, 1.0f)));
 	// Shaft?
@@ -178,34 +142,49 @@ bool load_content() {
 	motions[0] = mesh(geometry_builder::create_sphere(20, 20, vec3(0.5f)));
 	motions[1] = mesh(geometry_builder::create_sphere(20, 20, vec3(0.5f)));
 
+	//RAMA
+	rama = mesh(geometry_builder::create_cylinder(100, 100));
+
 	// DEMO SHADOW PLANE
 	shadow_plane = mesh(geometry_builder::create_plane());
 
 	// TRANSFORM MESHES
 	// Solar objects
-	solar_objects["sun"].get_transform().scale = vec3(5.0f, 5.0f, 5.0f);
+	solar_objects["sun"].get_transform().scale = vec3(8.0f, 8.0f, 8.0f);
 	solar_objects["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
+	solar_objects["sun"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+
 	solar_objects["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
-	solar_objects["earth"].get_transform().scale = vec3(1.0f);
+
 	solar_objects["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
-	solar_objects["earth"].get_transform().rotate(vec3(0.0f, radians(23.44), 0.0f));
+	solar_objects["earth"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+	solar_objects["earth"].get_transform().rotate(vec3(0.0f, 0.0f, radians(23.44)));
+
 	solar_objects["mercury"].get_transform().scale = 0.3f * solar_objects["venus"].get_transform().scale;
 	solar_objects["mercury"].get_transform().translate(0.39f * solar_objects["earth"].get_transform().position);
-	solar_objects["mercury"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	solar_objects["mercury"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+
 	solar_objects["venus"].get_transform().scale = vec3(2.0f);
 	solar_objects["venus"].get_transform().translate(0.72f * solar_objects["earth"].get_transform().position);
-	solar_objects["venus"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
+	solar_objects["venus"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+
+	solar_objects["earth"].get_transform().scale = solar_objects["venus"].get_transform().scale;
+
 	solar_objects["mars"].get_transform().scale = 0.53f * solar_objects["venus"].get_transform().scale;
 	solar_objects["mars"].get_transform().translate(1.52f * solar_objects["earth"].get_transform().position);
-	solar_objects["mars"].get_transform().rotate(vec3(0.0f, radians(90.0), 0.0f));
-	solar_objects["clouds"].get_transform().scale = vec3(1.005f, 1.005f, 1.005f);
+	solar_objects["mars"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+
+	solar_objects["clouds"].get_transform().scale = vec3(1.01f) * solar_objects["earth"].get_transform().scale;
 	solar_objects["clouds"].get_transform().position = solar_objects["earth"].get_transform().position;
+	solar_objects["clouds"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
 	// Enterprise (transform hierarchy in place)
 	// Saucer section
 	enterprise[0].get_transform().position = vec3(50.0f, 10.0f, 50.0f);
+	enterprise[0].get_transform().scale = vec3(10.0f, 1.0f, 10.0f);
 	// Connection
-	enterprise[1].get_transform().position = vec3(0.0f, -2.5f, -4.5f);
+	enterprise[1].get_transform().scale = vec3(0.1f, 1.0f, 0.1f);
+	enterprise[1].get_transform().position = vec3(0.0f, -2.5f, -0.45f);
 	// Shaft?
 	enterprise[2].get_transform().position = vec3(0.0f, -2.0f, -3.25f);
 	enterprise[2].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
@@ -222,42 +201,49 @@ bool load_content() {
 	motions[0].get_transform().position = enterprise[0].get_transform().position - vec3(3.0f, -0.5f, 6.75f);
 	motions[1].get_transform().position = enterprise[0].get_transform().position - vec3(-3.0f, -0.5f, 6.75f);
 
+	// Rama
+	rama.get_transform().scale = vec3(10.0f, 20.0f, 10.0f);
+	rama.get_transform().position = vec3(70.0f, 0.0f, 70.0f);
+	rama.get_transform().rotate(vec3(0.0f, 0.0f, half_pi<float>()));
+
 	// Demo shadow plane
 	shadow_plane.get_transform().position = vec3(40.0f, -15.0f, 0.0f);
-	shadow_plane.get_transform().scale = vec3(0.5f, 1.0f, 1.0f);
+	shadow_plane.get_transform().scale = vec3(0.5f, 1.0f, 1.5f);
 
 	// SET MATERIALS
 	// Solar objects
-	material mat;
-	mat.set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_shininess(25.0f);
-	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	solar_objects["earth"].set_material(mat);
-	solar_objects["clouds"].set_material(mat);
-	solar_objects["venus"].set_material(mat);
-	solar_objects["mars"].set_material(mat);
 
-	mat.set_specular(vec4(0.5f, 0.5f, 0.5f, 1.0f));
-	mat.set_shininess(100.0f);
-	solar_objects["mercury"].set_material(mat);
+	solar_objects["earth"].get_material().set_specular(vec4(1.0f, 0.65f, 0.0f, 1.0f));
+	solar_objects["earth"].get_material().set_shininess(25.0f);
 
-	mat.set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_diffuse(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	mat.set_shininess(25.0f);
-	solar_objects["sun"].set_material(mat);
+	solar_objects["clouds"].get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	solar_objects["clouds"].get_material().set_shininess(0.0f);
 
-	mat.set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-	solar_objects["black_hole"].set_material(mat);
+	solar_objects["venus"].get_material().set_specular(vec4(0.25f, 0.1625f, 0.0f, 1.0f));
+	solar_objects["venus"].get_material().set_shininess(5.0f);
+
+	solar_objects["mars"].get_material().set_specular(vec4(0.5f, 0.325f, 0.0f, 1.0f));
+	solar_objects["mars"].get_material().set_shininess(2.0f);
+
+	solar_objects["mercury"].get_material().set_specular(vec4(0.256777, 0.137622, 0.086014, 1.0f));
+	solar_objects["mercury"].get_material().set_shininess(12.8f);
+
+	shadow_plane.get_material().set_specular(vec4(0.5f, 0.5f, 0.5f, 1.0f));
+	shadow_plane.get_material().set_shininess(100.0f);
+
+	solar_objects["sun"].get_material().set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	solar_objects["sun"].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	solar_objects["sun"].get_material().set_shininess(25.0f);
+
+	solar_objects["black_hole"].get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
 	// Enterprise
 	for (int i = 0; i < enterprise.size(); i++)
 	{
-		enterprise[i].get_material().set_emissive(vec4(0.2f, 0.2f, 0.2f, 1.0f));
-		enterprise[i].get_material().set_diffuse(vec4(0.8f, 0.8f, 0.8f, 1.0f));
-		enterprise[i].get_material().set_specular(vec4(0.774597f, 0.774597f, 0.774597f, 1.0f));
-		enterprise[i].get_material().set_shininess(0.6f * 128);
+		enterprise[i].get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+		enterprise[i].get_material().set_diffuse(vec4(0.5f, 0.5f, 0.5f, 1.0f));
+		enterprise[i].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+		enterprise[i].get_material().set_shininess(25.0f);
 	}
 	for (int i = 0; i < motions.size(); i++)
 	{
@@ -266,6 +252,12 @@ bool load_content() {
 		motions[i].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 		motions[i].get_material().set_shininess(25.0f);
 	}
+
+	// Rama
+	rama.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	rama.get_material().set_diffuse(vec4(0.53f, 0.45f, 0.37f, 1.0f));
+	rama.get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	rama.get_material().set_shininess(25.0f);
 
 	// Demo shadow plane
 	shadow_plane.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -286,25 +278,35 @@ bool load_content() {
 	textures["sunTex"] = texture("textures/sun_tex.jpg");
 	textures["mercuryTex"] = texture("textures/mercury_tex.jpg");
 	textures["venusTex"] = texture("textures/venus.jpg");
-	textures["earthTex"] = texture("textures/Earth_tex.tga");
+	textures["earthTex"] = texture("textures/earth_tex.jpg");
 	textures["marsTex"] = texture("textures/mars.jpg");
 	textures["cloudsTex"] = texture("textures/clouds.png");
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
 	textures["planeTex"] = texture("textures/white.jpg");
 
+
 	// Enterprise
-	// Load texture
-	enterprise_texture = texture("textures/squares.jpg");
+	enterprise_texture = texture("textures/saucer.jpg");
 	motions_textures[0] = texture("textures/white.jpg");
 	motions_textures[1] = texture("textures/white.jpg");
 
+	// Rama
+	textures["ramaOutTex"] = texture("textures/brick.jpg");
+	textures["ramaInTex"] = texture("textures/Earth_tex.tga");
+	textures["ramaGrassTex"] = texture("textures/grass.jpg");
+	blend_map = texture("textures/blend_map.jpg");
+
 	// LOAD NORMAL MAPS
 	normal_maps["sun"] = texture("textures/sun_normal_map.png");
+	normal_maps["black_hole"] = texture("textures/black_hole_normal_map.png");
 	normal_maps["mercury"] = texture("textures/mercury_normal_map.png");
 	normal_maps["venus"] = texture("textures/venus_normal_map.png");
 	normal_maps["earth"] = texture("textures/earth_normal_map.png");
 	normal_maps["mars"] = texture("textures/mars_normal_map.png");
 	normal_maps["clouds"] = texture("textures/clouds_normal_map.png");
+	normal_maps["saucer"] = texture("textures/saucer_normal_map.png");
+	normal_maps["ramaOut"] = texture("textures/brick_normalmap.jpg");
+	normal_maps["plane"] = texture("textures/plane_normal_map.png");
 
 	// SKYBOX
 	stars = mesh(geometry_builder::create_box());
@@ -314,7 +316,7 @@ bool load_content() {
 
 	// LIGHTS
 	// Set point light values, Position
-	points[0].move(vec3(0.0f, 1.0f, 0.0f));
+	points[0].move(vec3(0.0f, 0.0f, 0.0f));
 	// Light colour white
 	points[0].set_light_colour(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	// Set range to 20
@@ -327,6 +329,23 @@ bool load_content() {
 	spots[0].set_direction(normalize(vec3(-1.0f, -1.0f, 0.0f)));
 	spots[0].set_range(100.0f);
 	spots[0].set_power(0.1f);
+
+	// Set Rama lights
+	points_rama[0].set_position(rama.get_transform().position);
+	points_rama[0].set_light_colour(vec4(1.0f));
+	points_rama[0].set_range(100.0f);
+
+	spots_rama[0].set_position(rama.get_transform().position + vec3(5.0f, 0.0f, 0.0f));
+	spots_rama[0].set_light_colour(vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	spots_rama[0].set_direction(normalize(vec3(-1.0f, 0.0f, 0.0f)));
+	spots_rama[0].set_range(70.0f);
+	spots_rama[0].set_power(0.1f);
+
+	spots_rama[1].set_position(rama.get_transform().position - vec3(5.0f, 0.0f, 0.0f));
+	spots_rama[1].set_light_colour(vec4(0.0f, 1.0f, 0.0f, 1.0f));
+	spots_rama[1].set_direction(normalize(vec3(1.0f, 0.0f, 0.0f)));
+	spots_rama[1].set_range(70.0f);
+	spots_rama[1].set_power(0.1f);
 
 	// SHADERS
 	// Load in shaders for planets
@@ -349,10 +368,22 @@ bool load_content() {
 
 	// Load in shaders for enterprise
 	ship_eff.add_shader("shaders/enterprise.vert", GL_VERTEX_SHADER);
-	vector<string> ship_eff_frag_shaders{ "shaders/enterprise.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag" };
+	vector<string> ship_eff_frag_shaders{ "shaders/enterprise.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
 	ship_eff.add_shader(ship_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	// Build effect
 	ship_eff.build();
+
+	// Load in shaders for rama
+	inside_eff.add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
+	vector<string> inside_eff_frag_shaders{ "shaders/inside.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
+	inside_eff.add_shader(inside_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	inside_eff.build();
+
+	// Load in shaders for rama
+	outside_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
+	vector<string> outside_eff_frag_shaders{ "shaders/blend.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
+	outside_eff.add_shader(outside_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	outside_eff.build();
 
 	// Load in shaders for skybox
 	sbeff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
@@ -485,8 +516,7 @@ void target_camera_update(float delta_time)
 	tcam.update(delta_time);
 	// Set skybox position to camera position (camera in centre of skybox)
 	stars.get_transform().position = tcam.get_position();
-	// Check for selection
-	void check_selected();
+	
 }
 
 bool update(float delta_time) {
@@ -531,6 +561,10 @@ bool update(float delta_time) {
 		engage += vec3(-1.0f, 0.0f, 0.0f);
 	if (glfwGetKey(renderer::get_window(), GLFW_KEY_RIGHT)) 
 		engage += vec3(1.0f, 0.0f, 0.0f);
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_PAGE_UP))
+		engage += vec3(0.0f, 1.0f, 0.0f);
+	if (glfwGetKey(renderer::get_window(), GLFW_KEY_PAGE_DOWN))
+		engage += vec3(0.0f, -1.0f, 0.0f);
 	// Move enterprise
 	enterprise[0].get_transform().translate(engage);
 	motions[0].get_transform().translate(engage);
@@ -538,6 +572,8 @@ bool update(float delta_time) {
 	// Spin nacelle domes
 	motions[0].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
 	motions[1].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
+	// Spin rama
+	rama.get_transform().rotate(vec3(0.0f, delta_time, 0.0f));
 
 	// ORBITS
 	// All planets orbit sun
@@ -547,12 +583,14 @@ bool update(float delta_time) {
 	{
 		auto &m = e.second;
 		// The sun and the black hole spin around the origin
-		if (e.first == "sun" || e.first == "black_hole")
+		if (e.first == "sun")
+			m.get_transform().rotate(vec3(0.0f, 0.0f, -delta_time / 2.0f));
+		else if (e.first == "black_hole")
 			m.get_transform().rotate(vec3(0.0f, -delta_time / 2.0f, 0.0f));
 		// The clouds rotate faster than the Earth
 		else if (e.first == "clouds")
 		{
-			m.get_transform().rotate(vec3(0.0f, 2.0f * delta_time, 0.0f));
+			m.get_transform().rotate(vec3(0.0f, 0.0f, 2.0f * delta_time));
 			orbit(m, sun, e.first, delta_time);
 		}
 		// All planets simply orbit the sun
@@ -575,6 +613,45 @@ bool update(float delta_time) {
 		target_camera_update(delta_time);
 	}
 
+	// Check for selection
+	// If mouse button pressed get ray and check for intersection
+	if (glfwGetMouseButton(renderer::get_window(), GLFW_MOUSE_BUTTON_LEFT))
+	{
+		// Get the mouse position
+		double mouse_x;
+		double mouse_y;
+		glfwGetCursorPos(renderer::get_window(), &mouse_x, &mouse_y);
+		double xx = 2 * mouse_x / renderer::get_screen_width() - 1.0f;
+		double yy = 2 * (renderer::get_screen_height() - mouse_y) / renderer::get_screen_height() - 1.0f;
+		// Origin and direction of the ray
+		vec4 origin;
+		vec4 direction;
+		// Convert mouse position to ray
+		vec4 ray_start_screen(xx, yy, -1, 1);
+		vec4 ray_end_screen(xx, yy, 0, 1);
+		// Get inverse of PV
+		auto P = tcam.get_projection();
+		auto V = tcam.get_view();
+		auto inverse_matrix = inverse(P * V);
+		// Calculate origin and direction
+		vec4 ray_start_world = inverse_matrix * ray_start_screen;
+		ray_start_world = ray_start_world / ray_start_world.w;
+		vec4 ray_end_world = inverse_matrix * ray_end_screen;
+		ray_end_world = ray_end_world / ray_end_world.w;
+		direction = normalize(ray_end_world - ray_start_world);
+		origin = ray_start_world;
+		// Check all the solar_objects for intersection
+		for (auto &m : solar_objects)
+		{
+			float distance = 0.0f;
+			if (test_ray_oobb(origin, direction, m.second.get_minimal(), m.second.get_maximal(),
+				m.second.get_transform().get_transform_matrix(), distance))
+			{
+				if (m.first == "sun")
+					destroy_solar_system = true;
+			}
+		}
+	}
 	// SHADOW MAP UPDATE
 	shadow.light_position = spots[0].get_position();
 	shadow.light_dir = spots[0].get_direction();
@@ -641,20 +718,13 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 
 void create_shadow_map(mat4 &LightProjectionMat)
 {
-	// *********************************
 	// Set render target to shadow map
 	renderer::set_render_target(shadow);
 	// Clear depth buffer bit
 	glClear(GL_DEPTH_BUFFER_BIT);
 	// Set face cull mode to front
 	glCullFace(GL_FRONT);
-	// *********************************
-
-	// We could just use the Camera's projection, 
-	// but that has a narrower FoV than the cone of the spot light, so we would get clipping.
-	// so we have yo create a new Proj Mat with a field of view of 90.
 	LightProjectionMat = perspective<float>(90.f, renderer::get_screen_aspect(), 0.1f, 1000.f);
-
 	// Bind shader
 	renderer::bind(shadow_eff);
 	// Render solar_objects
@@ -703,10 +773,8 @@ void create_shadow_map(mat4 &LightProjectionMat)
 		auto m = e.second;
 		// Create MVP matrix
 		auto M = m.get_transform().get_transform_matrix();
-		// *********************************
 		// View matrix taken from shadow map
 		auto V = shadow.get_view();
-		// *********************************
 		auto MVP = LightProjectionMat * V * M;
 		// Set MVP matrix uniform
 		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"), // Location of uniform
@@ -716,12 +784,21 @@ void create_shadow_map(mat4 &LightProjectionMat)
 													// Render mesh
 		renderer::render(m);
 	}
-	// *********************************
+	auto m = rama;
+	auto M = m.get_transform().get_transform_matrix();
+	auto V = shadow.get_view();
+	auto MVP = LightProjectionMat * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"), // Location of uniform
+		1,                                      // Number of values - 1 mat4
+		GL_FALSE,                               // Transpose the matrix?
+		value_ptr(MVP));                        // Pointer to matrix data
+												// Render mesh
+	renderer::render(m);
 	// Set render target back to the screen
 	renderer::set_render_target();
 	// Set face cull mode to back
 	glCullFace(GL_BACK);
-	// *********************************
 
 }
 
@@ -840,20 +917,22 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 			value_ptr(lightMVP));
 		// Bind material
 		renderer::bind(enterprise[i].get_material(), "mat");
-		// Bind directional light
-		renderer::bind(directional, "directional");
 		// Bind point light
 		renderer::bind(points, "points");
 		// Bind spot light
 		renderer::bind(spots, "spots");
 		// Bind texture to renderer
 		renderer::bind(enterprise_texture, 0);
+		// Bind normal_map
+		renderer::bind(normal_maps["saucer"], 1);
+		// Set normal_map uniform
+		glUniform1i(ship_eff.get_uniform_location("normal_map"), 1);
 		// Set eye position
 		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
 		// Bind shadow map texture - use texture unit 1
-		renderer::bind(shadow.buffer->get_depth(), 1);
+		renderer::bind(shadow.buffer->get_depth(), 2);
 		// Set the shadow_map uniform
-		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 1);
+		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 2);
 		// Render mesh
 		renderer::render(enterprise[i]);
 	}
@@ -896,48 +975,89 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	}
 }
 
-void render_shadow_plane(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
+void render_rama(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 {
-	// Render floor
-	const auto PV = P * V;
-
-	glUniformMatrix4fv(ship_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(PV * shadow_plane.get_transform().get_transform_matrix()));
+	// Bind effect
+	renderer::bind(outside_eff);
+	// Create MVP matrix
+	auto M = rama.get_transform().get_transform_matrix();
+	auto MVP = P * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(outside_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	// Set M matrix uniform
-	glUniformMatrix4fv(ship_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(shadow_plane.get_transform().get_transform_matrix()));
+	glUniformMatrix4fv(outside_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
 	// Set N matrix uniform
-	glUniformMatrix3fv(ship_eff.get_uniform_location("N"), 1, GL_FALSE,
-		value_ptr(shadow_plane.get_transform().get_normal_matrix()));
-	// *********************************
-	// Set lightMVP uniform, using:
-	//Model matrix from m
-
-	// viewmatrix from the shadow map
-
-	// Multiply together with LightProjectionMat
-	auto lightMVP = LightProjectionMat * shadow.get_view() * shadow_plane.get_transform().get_transform_matrix();
+	glUniformMatrix3fv(outside_eff.get_uniform_location("N"), 1, GL_FALSE,
+		value_ptr(rama.get_transform().get_normal_matrix()));
+	// Set lightMVP uniform
+	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
 	// Set uniform
-	glUniformMatrix4fv(ship_eff.get_uniform_location("lightMVP"),
+	glUniformMatrix4fv(outside_eff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
 		value_ptr(lightMVP));
 	// Bind material
-	renderer::bind(shadow_plane.get_material(), "mat");
-	// Bind point light
+	renderer::bind(rama.get_material(), "mat");
+	// Bind light
 	renderer::bind(points, "points");
-	// Bind spot light
-	renderer::bind(spots, "spost");
-	// Bind floor texture
-	renderer::bind(textures["planeTex"], 0);
+	// Bind light
+	renderer::bind(spots, "spots");
+	// Bind textures
+	renderer::bind(textures["ramaOutTex"], 0);
+	renderer::bind(textures["ramaGrassTex"], 1);
+	// Bind blend map
+	renderer::bind(blend_map, 2);
+	// Set the uniform values for textures
+	static int tex_indices[] = { 0, 1 };
 	// Set tex uniform
-	glUniform1i(ship_eff.get_uniform_location("tex"), 0);
+	glUniform1iv(outside_eff.get_uniform_location("tex"), 2, tex_indices);
+	// Set blend map uniform
+	glUniform1i(outside_eff.get_uniform_location("blend_map"), 2);
+	// Bind normal_map
+	renderer::bind(normal_maps["ramaOut"], 3);
+	// Set normal_map uniform
+	glUniform1i(outside_eff.get_uniform_location("normal_map"), 3);
 	// Set eye position
-	glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture - use texture unit 1
-	renderer::bind(shadow.buffer->get_depth(), 1);
+	glUniform3fv(outside_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind shadow map texture - use texture unit 2
+	renderer::bind(shadow.buffer->get_depth(), 4);
 	// Set the shadow_map uniform
-	glUniform1i(ship_eff.get_uniform_location("shadow_map"), 1);
-	// Render floor
-	renderer::render(shadow_plane);
+	glUniform1i(outside_eff.get_uniform_location("shadow_map"), 4);
+	// Render mesh
+	renderer::render(rama);
+
+	// Disable depth test,depth mask,face culling
+	glDisable(GL_CULL_FACE);
+	// Bind effect
+	renderer::bind(inside_eff);
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(inside_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(inside_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
+	// Set N matrix uniform
+	glUniformMatrix3fv(inside_eff.get_uniform_location("N"), 1, GL_FALSE,
+		value_ptr(rama.get_transform().get_normal_matrix()));
+	// Set uniform
+	glUniformMatrix4fv(inside_eff.get_uniform_location("lightMVP"),
+		1,
+		GL_FALSE,
+		value_ptr(lightMVP));
+	// Bind material
+	renderer::bind(solar_objects["earth"].get_material(), "mat");
+	// Bind light
+	renderer::bind(points_rama, "points");
+	// Bind light
+	renderer::bind(spots_rama, "spots");
+	// Bind texture
+	renderer::bind(textures["ramaInTex"], 0);
+	// Set tex uniform
+	glUniform1i(inside_eff.get_uniform_location("tex"), 0);
+	// Bind normal_map
+	renderer::bind(normal_maps["earth"], 1);
+	// Set normal_map uniform
+	glUniform1i(inside_eff.get_uniform_location("normal_map"), 1);
+	renderer::render(rama);
+	glEnable(GL_CULL_FACE);
 }
 
 bool render() {
@@ -985,13 +1105,16 @@ bool render() {
 		else
 			render_solar_objects(planet_eff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
 	}
-	// Render clouds
-	render_clouds(P, V, LightProjectionMat);
+	// Render clouds (if the earth hasn't been sucked into the black hole)
+	if (solar_objects["earth"].get_transform().scale != vec3(0.0f))
+		render_clouds(P, V, LightProjectionMat);
 	// Render the Enterprise
 	render_enterprise(LightProjectionMat, P, V, cam_pos);
 	// Render shadow plane if necessary
 	if (demo_shadow == true)
-		render_shadow_plane(LightProjectionMat, P, V, cam_pos);
+		render_solar_objects(planet_eff, shadow_plane, "plane", P, V, LightProjectionMat, cam_pos);
+	// Render rama
+	render_rama(LightProjectionMat, P, V, cam_pos);
 	return true;
 }
 

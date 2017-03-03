@@ -19,9 +19,9 @@ bool load_content() {
   cylinder.get_transform().scale = vec3(5.0f, 5.0f, 5.0f);
 
   // Load brick.jpg texture
-  tex = texture("textures/brick.jpg");
+  tex = texture("textures/saucer.jpg");
   // Load brick_normalmap.jpg texture
-  normal_map = texture("textures/brick_normalmap.jpg");
+  normal_map = texture("textures/saucer_normal_map.png");
 
   // ****************************
   // Set material
@@ -29,7 +29,7 @@ bool load_content() {
   // - specular white - shininess 25
   // ****************************
   cylinder.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-  cylinder.get_material().set_diffuse(vec4(0.53f, 0.45f, 0.37f, 1.0f));
+  cylinder.get_material().set_diffuse(vec4(0.5f, 0.5f, 0.5f, 1.0f));
   cylinder.get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
   cylinder.get_material().set_shininess(25.0f);
 
