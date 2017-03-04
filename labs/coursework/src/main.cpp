@@ -5,13 +5,13 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
-mesh stars;
 map<string, mesh> solar_objects;
-cubemap cube_map;
 array<mesh, 7> enterprise;
 array<mesh, 2> motions;
-mesh shadow_plane;
 mesh rama;
+mesh shadow_plane;
+mesh stars;
+cubemap cube_map;
 
 effect planet_eff;
 effect sbeff;
@@ -24,8 +24,6 @@ effect shadow_eff;
 
 map<string, texture> textures;
 map<string, texture> normal_maps;
-texture blend_map;
-texture enterprise_texture;
 array<texture, 2> motions_textures;
 
 target_camera tcam;
@@ -34,7 +32,6 @@ chase_camera ccam;
 bool chase_camera_active = false;
 bool free_camera_active = false;
 
-directional_light directional;
 vector<point_light> points(1);
 vector<spot_light> spots(1);
 vector<point_light> points_rama(1);
@@ -59,6 +56,7 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	current_z = m.get_transform().position.z;
 	radius = distance(m.get_transform().position, rotCenter);
 	// If planet has fallen into black hole, leave it there
+	// and shrink to zero
 	if (radius < 0.3f)
 	{
 		m.get_transform().scale = vec3(0.0f);
@@ -83,7 +81,7 @@ void orbit(mesh &m, mesh &sun, string name, float delta_time)
 	// Calculate new position
 	float new_x = rotCenter.x + (radius * cosf(rotAngle));
 	float new_z = rotCenter.z + (radius * sinf(rotAngle));
-	vec3 newPos = vec3(new_x, 0, new_z);
+	vec3 newPos(new_x, 0, new_z);
 	m.get_transform().position = newPos;
 	// Spin planet
 	m.get_transform().rotate(vec3(0.0f, 0.0f, 2 * delta_time));
@@ -118,12 +116,12 @@ void black_hole(float delta_time)
 
 bool load_content() {
 	// SOLAR OBJECT MESHES
-	solar_objects["sun"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["mercury"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["venus"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["earth"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["mars"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
-	solar_objects["clouds"] = mesh(geometry(geometry_builder::create_sphere(20, 20)));
+	solar_objects["sun"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	solar_objects["mercury"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	solar_objects["venus"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	solar_objects["earth"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	solar_objects["mars"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	solar_objects["clouds"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
 
 	// ENTERPRISE MESHES
@@ -151,9 +149,9 @@ bool load_content() {
 	// TRANSFORM MESHES
 	// Solar objects
 	solar_objects["sun"].get_transform().scale = vec3(8.0f, 8.0f, 8.0f);
-	solar_objects["sun"].get_transform().translate(vec3(0.0f, 0.0f, 0.0f));
 	solar_objects["sun"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
+	solar_objects["black_hole"].get_transform().position = vec3(0.0f, -1.0f, 0.0f);
 	solar_objects["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
 
 	solar_objects["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
@@ -212,7 +210,6 @@ bool load_content() {
 
 	// SET MATERIALS
 	// Solar objects
-
 	solar_objects["earth"].get_material().set_specular(vec4(1.0f, 0.65f, 0.0f, 1.0f));
 	solar_objects["earth"].get_material().set_shininess(25.0f);
 
@@ -285,7 +282,7 @@ bool load_content() {
 	textures["planeTex"] = texture("textures/white.jpg");
 
 	// Enterprise
-	enterprise_texture = texture("textures/saucer.jpg");
+	textures["enterprise"] = texture("textures/saucer.jpg");
 	motions_textures[0] = texture("textures/white.jpg");
 	motions_textures[1] = texture("textures/white.jpg");
 
@@ -293,7 +290,7 @@ bool load_content() {
 	textures["ramaOutTex"] = texture("textures/brick.jpg");
 	textures["ramaInTex"] = texture("textures/Earth_tex.tga");
 	textures["ramaGrassTex"] = texture("textures/grass.jpg");
-	blend_map = texture("textures/blend_map.jpg");
+	textures["blend_map"] = texture("textures/blend_map.jpg");
 
 	// LOAD NORMAL MAPS
 	normal_maps["sun"] = texture("textures/sun_normal_map.png");
@@ -594,7 +591,9 @@ bool update(float delta_time) {
 		}
 		// All planets simply orbit the sun
 		else
+		{
 			orbit(m, sun, e.first, delta_time);
+		}
 	}
 
 	// CAMERA MODES
@@ -640,6 +639,8 @@ bool update(float delta_time) {
 		direction = normalize(ray_end_world - ray_start_world);
 		origin = ray_start_world;
 		// Check all the solar_objects for intersection
+		// **Currently only used to check for a sun click
+		// will implement a planet view selection**
 		for (auto &m : solar_objects)
 		{
 			float distance = 0.0f;
@@ -658,6 +659,85 @@ bool update(float delta_time) {
 	// FPS
 	cout << "FPS: " << 1.0f / delta_time << endl;
 	return true;
+}
+
+void create_shadow_map(mat4 &LightProjectionMat)
+{
+	// Set render target to shadow map
+	renderer::set_render_target(shadow);
+	// Clear depth buffer bit
+	glClear(GL_DEPTH_BUFFER_BIT);
+	// Set face cull mode to front
+	glCullFace(GL_FRONT);
+	LightProjectionMat = perspective<float>(90.f, renderer::get_screen_aspect(), 0.1f, 1000.f);
+	// Bind shader
+	renderer::bind(shadow_eff);
+	// Render Enterprise
+	for (size_t i = 0; i < enterprise.size(); i++) {
+		// SET M to be the usual mesh  transform matrix
+		auto M = enterprise[i].get_transform().get_transform_matrix();
+
+		// Apply the heirarchy chain
+		for (size_t j = i; j > 0; j--) {
+			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
+		}
+		// View matrix taken from shadow map
+		auto V = shadow.get_view();
+		auto MVP = LightProjectionMat * V * M;
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
+			1,
+			GL_FALSE,
+			value_ptr(MVP));
+		renderer::render(enterprise[i]);
+	}
+	for (int i = 0; i < motions.size(); i++) {
+		auto m = motions[i];
+		// Create MVP matrix
+		auto M = m.get_transform().get_transform_matrix();
+		// View matrix taken from shadow map
+		auto V = shadow.get_view();
+		auto MVP = LightProjectionMat * V * M;
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
+			1,
+			GL_FALSE,
+			value_ptr(MVP));
+		// Render mesh
+		renderer::render(m);
+	}
+	// Render solar_objects
+	for (auto &e : solar_objects) {
+		auto m = e.second;
+		// Create MVP matrix
+		auto M = m.get_transform().get_transform_matrix();
+		// View matrix taken from shadow map
+		auto V = shadow.get_view();
+		auto MVP = LightProjectionMat * V * M;
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
+			1,
+			GL_FALSE,
+			value_ptr(MVP));
+		// Render mesh
+		renderer::render(m);
+	}
+	// Render Rama
+	auto m = rama;
+	auto M = m.get_transform().get_transform_matrix();
+	auto V = shadow.get_view();
+	auto MVP = LightProjectionMat * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
+		1,
+		GL_FALSE,
+		value_ptr(MVP));
+	// Render mesh
+	renderer::render(m);
+	// Set render target back to the screen
+	renderer::set_render_target();
+	// Set face cull mode to back
+	glCullFace(GL_BACK);
 }
 
 void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
@@ -682,10 +762,7 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 		1,
 		GL_FALSE,
 		value_ptr(solar_objects["clouds"].get_transform().get_normal_matrix()));
-	// *********************************
-	// Set lightMVP uniform, using:
-	//Model matrix from m
-	// viewmatrix from the shadow map
+	// Set lightMVP uniform
 	// Multiply together with LightProjectionMat
 	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
 	// Set uniform
@@ -693,7 +770,6 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 		1,
 		GL_FALSE,
 		value_ptr(lightMVP));
-	// *********************************
 	// Bind material
 	renderer::bind(solar_objects["clouds"].get_material(), "mat");
 	// Bind light
@@ -707,7 +783,7 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 	glUniform1i(ceff.get_uniform_location("normal_map"), 1);
 	// Set eye position- Get this from active camera
 	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
-	// Bind shadow map texture - use texture unit 2
+	// Bind shadow map texture
 	renderer::bind(shadow.buffer->get_depth(), 2);
 	// Set the shadow_map uniform
 	glUniform1i(ceff.get_uniform_location("shadow_map"), 2);
@@ -715,95 +791,9 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 	renderer::render(solar_objects["clouds"]);
 }
 
-void create_shadow_map(mat4 &LightProjectionMat)
-{
-	// Set render target to shadow map
-	renderer::set_render_target(shadow);
-	// Clear depth buffer bit
-	glClear(GL_DEPTH_BUFFER_BIT);
-	// Set face cull mode to front
-	glCullFace(GL_FRONT);
-	LightProjectionMat = perspective<float>(90.f, renderer::get_screen_aspect(), 0.1f, 1000.f);
-	// Bind shader
-	renderer::bind(shadow_eff);
-	// Render solar_objects
-	for (size_t i = 0; i < enterprise.size(); i++) {
-		// *********************************
-		// SET M to be the usual mesh  transform matrix
-		auto M = enterprise[i].get_transform().get_transform_matrix();
-		// *********************************
-
-		// Apply the heirarchy chain
-		for (size_t j = i; j > 0; j--) {
-			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
-		}
-		// *********************************
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
-		// *********************************
-		auto MVP = LightProjectionMat * V * M;
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"), // Location of uniform
-			1,                                      // Number of values - 1 mat4
-			GL_FALSE,                               // Transpose the matrix?
-			value_ptr(MVP));                        // Pointer to matrix data
-													// Render mesh
-		renderer::render(enterprise[i]);
-	}
-	// Render solar_objects
-	for (int i = 0; i < motions.size(); i++) {
-		auto m = motions[i];
-		// Create MVP matrix
-		auto M = m.get_transform().get_transform_matrix();
-		// *********************************
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
-		// *********************************
-		auto MVP = LightProjectionMat * V * M;
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"), // Location of uniform
-			1,                                      // Number of values - 1 mat4
-			GL_FALSE,                               // Transpose the matrix?
-			value_ptr(MVP));                        // Pointer to matrix data
-													// Render mesh
-		renderer::render(m);
-	}
-	for (auto &e : solar_objects) {
-		auto m = e.second;
-		// Create MVP matrix
-		auto M = m.get_transform().get_transform_matrix();
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
-		auto MVP = LightProjectionMat * V * M;
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"), // Location of uniform
-			1,                                      // Number of values - 1 mat4
-			GL_FALSE,                               // Transpose the matrix?
-			value_ptr(MVP));                        // Pointer to matrix data
-													// Render mesh
-		renderer::render(m);
-	}
-	auto m = rama;
-	auto M = m.get_transform().get_transform_matrix();
-	auto V = shadow.get_view();
-	auto MVP = LightProjectionMat * V * M;
-	// Set MVP matrix uniform
-	glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"), // Location of uniform
-		1,                                      // Number of values - 1 mat4
-		GL_FALSE,                               // Transpose the matrix?
-		value_ptr(MVP));                        // Pointer to matrix data
-												// Render mesh
-	renderer::render(m);
-	// Set render target back to the screen
-	renderer::set_render_target();
-	// Set face cull mode to back
-	glCullFace(GL_BACK);
-
-}
-
 void render_skybox(mat4 P, mat4 V)
 {
-	// Disable depth test,depth mask,face culling
+	// Disable depth test, depth mask, face culling
 	glDisable(GL_DEPTH_TEST);
 	glDepthMask(GL_FALSE);
 	glDisable(GL_CULL_FACE);
@@ -812,9 +802,12 @@ void render_skybox(mat4 P, mat4 V)
 	// Calculate MVP for the skybox
 	auto MVP = P * V * stars.get_transform().get_transform_matrix();
 	glUniformMatrix4fv(sbeff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	// Bind the cube map and set it
 	renderer::bind(cube_map, 0);
 	glUniform1i(sbeff.get_uniform_location("cubemap"), 0);
+	// Render the skybox
 	renderer::render(stars);
+	// Enable depth test, depth mask, face culling
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
 	glEnable(GL_CULL_FACE);
@@ -844,7 +837,6 @@ void render_solar_objects(effect eff, mesh m, string name, mat4 P, mat4 V, mat4 
 		value_ptr(m.get_transform().get_normal_matrix()));
 	// Set lightMVP uniform
 	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
-	// Set uniform
 	glUniformMatrix4fv(eff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
@@ -864,7 +856,7 @@ void render_solar_objects(effect eff, mesh m, string name, mat4 P, mat4 V, mat4 
 	glUniform1i(eff.get_uniform_location("normal_map"), 1);
 	// Set eye position- Get this from active camera
 	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture - use texture unit 2
+	// Bind shadow map texture
 	renderer::bind(shadow.buffer->get_depth(), 2);
 	// Set the shadow_map uniform
 	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
@@ -874,7 +866,6 @@ void render_solar_objects(effect eff, mesh m, string name, mat4 P, mat4 V, mat4 
 
 void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 {
-	// Super effecient render loop, notice the things we only have to do once, rather than in a loop
 	// Bind effect
 	renderer::bind(ship_eff);
 	// Get PV
@@ -886,16 +877,13 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 
 	// Render solar_objects
 	for (size_t i = 0; i < enterprise.size(); i++) {
-		// *********************************
 		// SET M to be the usual mesh  transform matrix
 		auto M = enterprise[i].get_transform().get_transform_matrix();
-		// *********************************
 
 		// Apply the heirarchy chain
 		for (size_t j = i; j > 0; j--) {
 			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
 		}
-
 		// Set MVP matrix uniform
 		glUniformMatrix4fv(loc, 1, GL_FALSE, value_ptr(PV * M));
 		// Set M matrix uniform
@@ -903,13 +891,8 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		// Set N matrix uniform
 		glUniformMatrix3fv(ship_eff.get_uniform_location("N"), 1, GL_FALSE,
 			value_ptr(enterprise[i].get_transform().get_normal_matrix()));
-		// *********************************
-		// Set lightMVP uniform, using:
-		//Model matrix from m
-		// viewmatrix from the shadow map
-		// Multiply together with LightProjectionMat
+		// Set lightMVP uniform
 		auto lightMVP = LightProjectionMat * shadow.get_view() * M;
-		// Set uniform
 		glUniformMatrix4fv(ship_eff.get_uniform_location("lightMVP"),
 			1,
 			GL_FALSE,
@@ -921,14 +904,14 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		// Bind spot light
 		renderer::bind(spots, "spots");
 		// Bind texture to renderer
-		renderer::bind(enterprise_texture, 0);
+		renderer::bind(textures["enterprise"], 0);
 		// Bind normal_map
 		renderer::bind(normal_maps["saucer"], 1);
 		// Set normal_map uniform
 		glUniform1i(ship_eff.get_uniform_location("normal_map"), 1);
 		// Set eye position
 		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-		// Bind shadow map texture - use texture unit 1
+		// Bind shadow map texture
 		renderer::bind(shadow.buffer->get_depth(), 2);
 		// Set the shadow_map uniform
 		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 2);
@@ -945,14 +928,8 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		glUniformMatrix3fv(ship_eff.get_uniform_location("N"), 1, GL_FALSE,
 			value_ptr(motions[i].get_transform().get_normal_matrix()));
 		// *********************************
-		// Set lightMVP uniform, using:
-		//Model matrix from m
-
-		// viewmatrix from the shadow map
-
-		// Multiply together with LightProjectionMat
+		// Set lightMVP uniform
 		auto lightMVP = LightProjectionMat * shadow.get_view() * M;
-		// Set uniform
 		glUniformMatrix4fv(ship_eff.get_uniform_location("lightMVP"),
 			1,
 			GL_FALSE,
@@ -966,7 +943,7 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		renderer::bind(motions_textures[i], 0);
 		// Set eye position
 		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-		// Bind shadow map texture - use texture unit 1
+		// Bind shadow map texture
 		renderer::bind(shadow.buffer->get_depth(), 1);
 		// Set the shadow_map uniform
 		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 1);
@@ -990,7 +967,6 @@ void render_rama(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		value_ptr(rama.get_transform().get_normal_matrix()));
 	// Set lightMVP uniform
 	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
-	// Set uniform
 	glUniformMatrix4fv(outside_eff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
@@ -1005,7 +981,7 @@ void render_rama(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	renderer::bind(textures["ramaOutTex"], 0);
 	renderer::bind(textures["ramaGrassTex"], 1);
 	// Bind blend map
-	renderer::bind(blend_map, 2);
+	renderer::bind(textures["blend_map"], 2);
 	// Set the uniform values for textures
 	static int tex_indices[] = { 0, 1 };
 	// Set tex uniform
@@ -1018,7 +994,7 @@ void render_rama(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	glUniform1i(outside_eff.get_uniform_location("normal_map"), 3);
 	// Set eye position
 	glUniform3fv(outside_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture - use texture unit 2
+	// Bind shadow map texture
 	renderer::bind(shadow.buffer->get_depth(), 4);
 	// Set the shadow_map uniform
 	glUniform1i(outside_eff.get_uniform_location("shadow_map"), 4);
@@ -1036,7 +1012,7 @@ void render_rama(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	// Set N matrix uniform
 	glUniformMatrix3fv(inside_eff.get_uniform_location("N"), 1, GL_FALSE,
 		value_ptr(rama.get_transform().get_normal_matrix()));
-	// Set uniform
+	// Set lightMVP uniform
 	glUniformMatrix4fv(inside_eff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
@@ -1091,12 +1067,14 @@ bool render() {
 	for (auto &e : solar_objects) {
 		// Skip those: with scale of 0 (sucked into black hole),
 		//		       not to be rendered unless sun has been clicked
-		if (e.first == "clouds" ||
-			e.second.get_transform().scale == vec3(0.0f) ||
+		if (e.second.get_transform().scale == vec3(0.0f) ||
 			(e.first == "black_hole" && destroy_solar_system == false))
 		{
 			continue;
 		}
+		// Render clouds (if the earth hasn't been sucked into the black hole)
+		else if (e.first == "clouds" && solar_objects["earth"].get_transform().scale != vec3(0.0f))
+			render_clouds(P, V, LightProjectionMat);
 		// Render sun
 		else if (e.first == "sun")
 			render_solar_objects(suneff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
@@ -1104,16 +1082,13 @@ bool render() {
 		else
 			render_solar_objects(planet_eff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
 	}
-	// Render clouds (if the earth hasn't been sucked into the black hole)
-	if (solar_objects["earth"].get_transform().scale != vec3(0.0f))
-		render_clouds(P, V, LightProjectionMat);
 	// Render the Enterprise
 	render_enterprise(LightProjectionMat, P, V, cam_pos);
+	// Render rama
+	render_rama(LightProjectionMat, P, V, cam_pos);
 	// Render shadow plane if necessary
 	if (demo_shadow == true)
 		render_solar_objects(planet_eff, shadow_plane, "plane", P, V, LightProjectionMat, cam_pos);
-	// Render rama
-	render_rama(LightProjectionMat, P, V, cam_pos);
 	return true;
 }
 
