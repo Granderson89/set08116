@@ -14,9 +14,9 @@ mesh stars;
 cubemap cube_map;
 
 effect planet_eff;
-effect sbeff;
-effect ceff;
-effect suneff;
+effect skybox_eff;
+effect cloud_eff;
+effect sun_eff;
 effect ship_eff;
 effect inside_eff;
 effect outside_eff;
@@ -352,15 +352,15 @@ bool load_content() {
 	planet_eff.build();
 	
 	// Load in shaders for clouds
-	ceff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
-	vector<string> ceff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag"};
-	ceff.add_shader(ceff_frag_shaders, GL_FRAGMENT_SHADER);
-	ceff.build();
+	cloud_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
+	vector<string> cloud_eff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag"};
+	cloud_eff.add_shader(cloud_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	cloud_eff.build();
 	
 	// Load in shaders for sun
-	suneff.add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
-	suneff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
-	suneff.build();
+	sun_eff.add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
+	sun_eff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	sun_eff.build();
 
 	// Load in shaders for enterprise
 	ship_eff.add_shader("shaders/enterprise.vert", GL_VERTEX_SHADER);
@@ -382,9 +382,9 @@ bool load_content() {
 	outside_eff.build();
 
 	// Load in shaders for skybox
-	sbeff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
-	sbeff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
-	sbeff.build();
+	skybox_eff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
+	skybox_eff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
+	skybox_eff.build();
 
 	// Load is shadow shades
 	shadow_eff.add_shader("shaders/spot.vert", GL_VERTEX_SHADER);
@@ -396,7 +396,7 @@ bool load_content() {
 
 	// CAMERAS
 	// Set target camera properties
-	tcam.set_position(vec3(60.0f, 10.0f, 60.0f));
+	tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
 	tcam.set_target(vec3(0.0f, 0.0f, 0.0f));
 	tcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
 
@@ -743,22 +743,22 @@ void create_shadow_map(mat4 &LightProjectionMat)
 void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 {
 	// Render clouds
-	renderer::bind(ceff);
+	renderer::bind(cloud_eff);
 	// Create MVP matrix
 	auto M = solar_objects["clouds"].get_transform().get_transform_matrix();
 	auto MVP = P * V * M;
 	// Set MVP matrix uniform
-	glUniformMatrix4fv(ceff.get_uniform_location("MVP"),
+	glUniformMatrix4fv(cloud_eff.get_uniform_location("MVP"),
 		1,
 		GL_FALSE,
 		value_ptr(MVP));
 	// Set M matrix uniform
-	glUniformMatrix4fv(ceff.get_uniform_location("M"),
+	glUniformMatrix4fv(cloud_eff.get_uniform_location("M"),
 		1,
 		GL_FALSE,
 		value_ptr(M));
 	// Set N matrix uniform - remember - 3x3 matrix
-	glUniformMatrix3fv(ceff.get_uniform_location("N"),
+	glUniformMatrix3fv(cloud_eff.get_uniform_location("N"),
 		1,
 		GL_FALSE,
 		value_ptr(solar_objects["clouds"].get_transform().get_normal_matrix()));
@@ -766,7 +766,7 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 	// Multiply together with LightProjectionMat
 	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
 	// Set uniform
-	glUniformMatrix4fv(ceff.get_uniform_location("lightMVP"),
+	glUniformMatrix4fv(cloud_eff.get_uniform_location("lightMVP"),
 		1,
 		GL_FALSE,
 		value_ptr(lightMVP));
@@ -776,17 +776,17 @@ void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
 	renderer::bind(points, "points");
 	// Bind and set textures
 	renderer::bind(textures["cloudsTex"], 0);
-	glUniform1i(ceff.get_uniform_location("tex"), 0);
+	glUniform1i(cloud_eff.get_uniform_location("tex"), 0);
 	// Bind normal_map
 	renderer::bind(normal_maps["clouds"], 1);
 	// Set normal_map uniform
-	glUniform1i(ceff.get_uniform_location("normal_map"), 1);
+	glUniform1i(cloud_eff.get_uniform_location("normal_map"), 1);
 	// Set eye position- Get this from active camera
-	glUniform3fv(ceff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
+	glUniform3fv(cloud_eff.get_uniform_location("eye_pos"), 1, value_ptr(fcam.get_position()));
 	// Bind shadow map texture
 	renderer::bind(shadow.buffer->get_depth(), 2);
 	// Set the shadow_map uniform
-	glUniform1i(ceff.get_uniform_location("shadow_map"), 2);
+	glUniform1i(cloud_eff.get_uniform_location("shadow_map"), 2);
 	// Render mesh
 	renderer::render(solar_objects["clouds"]);
 }
@@ -798,13 +798,13 @@ void render_skybox(mat4 P, mat4 V)
 	glDepthMask(GL_FALSE);
 	glDisable(GL_CULL_FACE);
 	// Bind skybox effect
-	renderer::bind(sbeff);
+	renderer::bind(skybox_eff);
 	// Calculate MVP for the skybox
 	auto MVP = P * V * stars.get_transform().get_transform_matrix();
-	glUniformMatrix4fv(sbeff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	glUniformMatrix4fv(skybox_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	// Bind the cube map and set it
 	renderer::bind(cube_map, 0);
-	glUniform1i(sbeff.get_uniform_location("cubemap"), 0);
+	glUniform1i(skybox_eff.get_uniform_location("cubemap"), 0);
 	// Render the skybox
 	renderer::render(stars);
 	// Enable depth test, depth mask, face culling
@@ -874,12 +874,10 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 	glUniform1i(ship_eff.get_uniform_location("tex"), 0);
 	// Find the lcoation for the MVP uniform
 	const auto loc = ship_eff.get_uniform_location("MVP");
-
-	// Render solar_objects
+	// Render Enterprise
 	for (size_t i = 0; i < enterprise.size(); i++) {
 		// SET M to be the usual mesh  transform matrix
 		auto M = enterprise[i].get_transform().get_transform_matrix();
-
 		// Apply the heirarchy chain
 		for (size_t j = i; j > 0; j--) {
 			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
@@ -927,7 +925,6 @@ void render_enterprise(mat4 &LightProjectionMat, mat4 P, mat4 V, vec3 cam_pos)
 		// Set N matrix uniform
 		glUniformMatrix3fv(ship_eff.get_uniform_location("N"), 1, GL_FALSE,
 			value_ptr(motions[i].get_transform().get_normal_matrix()));
-		// *********************************
 		// Set lightMVP uniform
 		auto lightMVP = LightProjectionMat * shadow.get_view() * M;
 		glUniformMatrix4fv(ship_eff.get_uniform_location("lightMVP"),
@@ -1077,7 +1074,7 @@ bool render() {
 			render_clouds(P, V, LightProjectionMat);
 		// Render sun
 		else if (e.first == "sun")
-			render_solar_objects(suneff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
+			render_solar_objects(sun_eff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
 		// Render planets
 		else
 			render_solar_objects(planet_eff, e.second, e.first, P, V, LightProjectionMat, cam_pos);
