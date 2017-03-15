@@ -2,8 +2,20 @@
 #include <graphics_framework.h>
 
 using namespace std;
+using namespace std::chrono;
 using namespace graphics_framework;
 using namespace glm;
+
+const unsigned int MAX_PARTICLES = 4096;
+
+vec4 positions[MAX_PARTICLES];
+vec4 velocitys[MAX_PARTICLES];
+GLuint G_Position_buffer, G_Velocity_buffer;
+effect smoke_eff;
+effect compute_eff;
+GLuint vao;
+texture smoke;
+mat4 smoke_M;
 
 map<string, mesh> solar_objects;
 array<mesh, 7> enterprise;
@@ -179,6 +191,7 @@ bool load_content() {
 	// Enterprise (transform hierarchy in place)
 	// Saucer section
 	enterprise[0].get_transform().position = vec3(50.0f, 10.0f, 50.0f);
+	smoke_M = enterprise[0].get_transform().get_transform_matrix();
 	enterprise[0].get_transform().scale = vec3(10.0f, 1.0f, 10.0f);
 	// Connection
 	enterprise[1].get_transform().scale = vec3(0.1f, 1.0f, 0.1f);
@@ -198,7 +211,7 @@ bool load_content() {
 	// Nacelle light domes
 	motions[0].get_transform().position = enterprise[0].get_transform().position - vec3(3.0f, -0.5f, 6.75f);
 	motions[1].get_transform().position = enterprise[0].get_transform().position - vec3(-3.0f, -0.5f, 6.75f);
-
+	
 	// Rama
 	rama.get_transform().scale = vec3(10.0f, 20.0f, 10.0f);
 	rama.get_transform().position = vec3(70.0f, 0.0f, 70.0f);
@@ -410,6 +423,48 @@ bool load_content() {
 	ccam.set_springiness(0.5f);
 	ccam.move(solar_objects["mercury"].get_transform().position, eulerAngles(solar_objects["mercury"].get_transform().orientation));
 	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
+	
+	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+	uniform_real_distribution<float> dist;
+
+	smoke = texture("textures/smoke.png");
+
+	// Initilise particles
+	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
+		positions[i] = vec4(((2.0f * dist(rand)) - 1.0f) / 10.0f, 5.0f * dist(rand), 0.0f, 0.0f);
+		velocitys[i] = vec4(0.0f, 0.1f + dist(rand), 0.0f, 0.0f);
+	}
+	// Load in shaders
+	smoke_eff.add_shader("shaders/smoke.vert", GL_VERTEX_SHADER);
+	smoke_eff.add_shader("shaders/smoke.frag", GL_FRAGMENT_SHADER);
+	smoke_eff.add_shader("shaders/smoke.geom", GL_GEOMETRY_SHADER);
+
+	smoke_eff.build();
+
+	// Load in shaders
+	compute_eff.add_shader("shaders/particle.comp", GL_COMPUTE_SHADER);
+	compute_eff.build();
+
+	// a useless vao, but we need it bound or we get errors.
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	// *********************************
+	//Generate Position Data buffer
+	glGenBuffers(1, &G_Position_buffer);
+	// Bind as GL_SHADER_STORAGE_BUFFER
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Position_buffer);
+	// Send Data to GPU, use GL_DYNAMIC_DRAW
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(positions[0]) * MAX_PARTICLES, positions, GL_DYNAMIC_DRAW);
+	// Generate Velocity Data buffer
+	glGenBuffers(1, &G_Velocity_buffer);
+	// Bind as GL_SHADER_STORAGE_BUFFER
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
+	// Send Data to GPU, use GL_DYNAMIC_DRAW
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
+	// *********************************
+	//Unbind
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	
 	return true;
 }
 
@@ -516,6 +571,13 @@ void target_camera_update(float delta_time)
 }
 
 bool update(float delta_time) {
+	if (delta_time > 10.0f) {
+		delta_time = 10.0f;
+	}
+	renderer::bind(compute_eff);
+	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, &(vec3(3.0f, 5.0f, 5.0f))[0]);
+	glUniform1f(compute_eff.get_uniform_location("delta_time"), delta_time);
+
 	// USER CONTROLS
 	// Camera controls
 	// c - switch to chase camera
@@ -738,6 +800,58 @@ void create_shadow_map(mat4 &LightProjectionMat)
 	renderer::set_render_target();
 	// Set face cull mode to back
 	glCullFace(GL_BACK);
+}
+
+void render_fire(mat4 P, mat4 V, vec3 cam_pos)
+{
+	// Bind Compute Shader
+	renderer::bind(compute_eff);
+	// Bind data as SSBO
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, G_Position_buffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, G_Velocity_buffer);
+	// Dispatch
+	glDispatchCompute(MAX_PARTICLES / 128, 1, 1);
+	// Sync, wait for completion
+	glMemoryBarrier(GL_ALL_BARRIER_BITS);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	// *********************************
+	// Bind render effect
+	renderer::bind(smoke_eff);
+	// Create MV matrix
+	mat4 M = smoke_M;
+	auto MV = V * M;
+	// Set the colour uniform
+	glUniform4fv(smoke_eff.get_uniform_location("colour"), 1, value_ptr(vec4(1.0f)));
+	// Set MV, and P matrix uniforms seperatly
+	glUniformMatrix4fv(smoke_eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(MV));
+	glUniformMatrix4fv(smoke_eff.get_uniform_location("P"), 1, GL_FALSE, value_ptr(P));
+	// Set point_size size uniform to .1f
+	glUniform1f(smoke_eff.get_uniform_location("point_size"), 0.1f);
+	// Bind particle texture
+	renderer::bind(smoke, 0);
+	// *********************************
+
+	// Bind position buffer as GL_ARRAY_BUFFER
+	glBindBuffer(GL_ARRAY_BUFFER, G_Position_buffer);
+	// Setup vertex format
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (void *)0);
+	// Enable Blending
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// Disable Depth Mask
+	glDepthMask(GL_FALSE);
+	// Render
+	glDrawArrays(GL_POINTS, 0, MAX_PARTICLES);
+	// Tidy up, enable depth mask
+	glDepthMask(GL_TRUE);
+	// Disable Blend
+	glDisable(GL_BLEND);
+	// Unbind all arrays
+	glDisableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glUseProgram(0);
 }
 
 void render_clouds(mat4 P, mat4 V, mat4 LightProjectionMat)
@@ -1083,6 +1197,8 @@ bool render() {
 	render_enterprise(LightProjectionMat, P, V, cam_pos);
 	// Render rama
 	render_rama(LightProjectionMat, P, V, cam_pos);
+	// Render fire
+	render_fire(P, V, cam_pos);
 	// Render shadow plane if necessary
 	if (demo_shadow == true)
 		render_solar_objects(planet_eff, shadow_plane, "plane", P, V, LightProjectionMat, cam_pos);

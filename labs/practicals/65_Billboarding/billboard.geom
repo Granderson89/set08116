@@ -34,25 +34,23 @@ void main() {
   gl_Position = P * vec4(va, position.zw);
   tex_coord = vec2(0.0, 0.0);
   EmitVertex();
-
   // *********************************
   // Vertex 2 is bottom right
-
-
-
-
+  vec2 vb = position.xy + vec2(0.5, -0.5) * point_size;
+  gl_Position = P * vec4(vb, position.zw);
+  tex_coord = vec2(1.0, 0.0);
+  EmitVertex();
   // Vertex 3 is top left
-
-
-
-
+  vec2 vc = position.xy + vec2(-0.5, 0.5) * point_size;
+  gl_Position = P * vec4(vc, position.zw);
+  tex_coord = vec2(0.0, 1.0);
+  EmitVertex();
   // Vertex 4 it top right
-
-
-
-
+  vec2 vd = position.xy + vec2(0.5, 0.5) * point_size;
+  gl_Position = P * vec4(vd, position.zw);
+  tex_coord = vec2(1.0, 1.0);
+  EmitVertex();
   // *********************************
-
   // End Primitive
   EndPrimitive();
 }

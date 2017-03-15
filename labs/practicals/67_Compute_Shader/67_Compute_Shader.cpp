@@ -42,19 +42,18 @@ bool load_content() {
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
   // *********************************
-   //Generate Position Data buffer
-
+  //Generate Position Data buffer
+  glGenBuffers(1, &G_Position_buffer);
   // Bind as GL_SHADER_STORAGE_BUFFER
-
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Position_buffer);
   // Send Data to GPU, use GL_DYNAMIC_DRAW
-
-
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(positions[0]) * MAX_PARTICLES, positions, GL_DYNAMIC_DRAW);
   // Generate Velocity Data buffer
-
+  glGenBuffers(1, &G_Velocity_buffer);
   // Bind as GL_SHADER_STORAGE_BUFFER
-
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
   // Send Data to GPU, use GL_DYNAMIC_DRAW
-
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
   // *********************************
    //Unbind
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);

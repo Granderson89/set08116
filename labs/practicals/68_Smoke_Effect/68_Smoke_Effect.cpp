@@ -30,7 +30,7 @@ bool load_content() {
 
   // Initilise particles
   for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-    positions[i] = vec4(((2.0f * dist(rand)) - 1.0f) / 10.0f, 5.0 * dist(rand), 0.0f, 0.0f);
+    positions[i] = vec4(((52.0f * dist(rand)) - 1.0f) / 10.0f, 5.0 * dist(rand), 0.0f, 0.0f);
     velocitys[i] = vec4(0.0f, 0.1f + dist(rand), 0.0f, 0.0f);
   }
   // Load in shaders
@@ -48,19 +48,18 @@ bool load_content() {
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
   // *********************************
-   //Generate Position Data buffer
-
+  //Generate Position Data buffer
+  glGenBuffers(1, &G_Position_buffer);
   // Bind as GL_SHADER_STORAGE_BUFFER
-
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Position_buffer);
   // Send Data to GPU, use GL_DYNAMIC_DRAW
-
-
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(positions[0]) * MAX_PARTICLES, positions, GL_DYNAMIC_DRAW);
   // Generate Velocity Data buffer
-
+  glGenBuffers(1, &G_Velocity_buffer);
   // Bind as GL_SHADER_STORAGE_BUFFER
-
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
   // Send Data to GPU, use GL_DYNAMIC_DRAW
-
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
   // *********************************
    //Unbind
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -132,21 +131,20 @@ bool render() {
 
   // *********************************
   // Bind render effect
-
+  renderer::bind(eff);
   // Create MV matrix
-
-
-
+  mat4 M(1.0f);
+  auto V = cam.get_view();
+  auto MV = V * M;
   // Set the colour uniform
-
+  glUniform4fv(eff.get_uniform_location("colour"), 1, value_ptr(vec4(1.0f)));
   // Set MV, and P matrix uniforms seperatly
-
-
+  glUniformMatrix4fv(eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(MV));
+  glUniformMatrix4fv(eff.get_uniform_location("P"), 1, GL_FALSE, value_ptr(cam.get_projection()));
   // Set point_size size uniform to .1f
-
+  glUniform1f(eff.get_uniform_location("point_size"), 0.1f);
   // Bind particle texture
-
-
+  renderer::bind(tex, 0);
   // *********************************
 
   // Bind position buffer as GL_ARRAY_BUFFER
