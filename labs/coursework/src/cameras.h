@@ -1,3 +1,8 @@
+// cameras.h - Header file containing camera functions
+// Functions to load the cameras, update each camera 
+// and change the active camera
+// Last modified - 24/03/2017
+
 #pragma once
 
 #include <glm\glm.hpp>
@@ -7,6 +12,27 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
+// Load cameras
+void load_cameras(target_camera &tcam, free_camera &fcam, chase_camera &ccam)
+{
+	// Set target camera properties
+	tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
+	tcam.set_target(vec3(0.0f, 0.0f, 0.0f));
+	tcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
+
+	// Set free camera properties
+	fcam.set_position(vec3(50.0f, 10.0f, 50.0f));
+	fcam.set_target(vec3(0.0f, 0.0f, 0.0f));
+	fcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
+
+	// Set chase camera properties
+	ccam.set_pos_offset(vec3(0.0f, 2.0f, 10.0f));
+	ccam.set_springiness(0.5f);
+	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
+
+}
+
+// Update the chase camera
 void chase_camera_update(chase_camera &ccam, float delta_time, mesh target_mesh, mesh &stars, double &cursor_x, double &cursor_y)
 {
 	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -38,6 +64,7 @@ void chase_camera_update(chase_camera &ccam, float delta_time, mesh target_mesh,
 	stars.get_transform().position = ccam.get_position();
 }
 
+// Update the free camera
 void free_camera_update(free_camera &fcam, float delta_time, mesh &stars, double &cursor_x, double &cursor_y)
 {
 	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -80,6 +107,7 @@ void free_camera_update(free_camera &fcam, float delta_time, mesh &stars, double
 	stars.get_transform().position = fcam.get_position();
 }
 
+// Update the target camera
 void target_camera_update(target_camera &tcam, float delta_time, mesh &stars)
 {
 	glfwSetInputMode(renderer::get_window(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -107,25 +135,7 @@ void target_camera_update(target_camera &tcam, float delta_time, mesh &stars)
 
 }
 
-void load_cameras(target_camera &tcam, free_camera &fcam, chase_camera &ccam)
-{
-	// Set target camera properties
-	tcam.set_position(vec3(50.0f, 10.0f, 50.0f));
-	tcam.set_target(vec3(0.0f, 0.0f, 0.0f));
-	tcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
-
-	// Set free camera properties
-	fcam.set_position(vec3(50.0f, 10.0f, 50.0f));
-	fcam.set_target(vec3(0.0f, 0.0f, 0.0f));
-	fcam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
-
-	// Set chase camera properties
-	ccam.set_pos_offset(vec3(0.0f, 2.0f, 10.0f));
-	ccam.set_springiness(0.5f);
-	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
-
-}
-
+// Change the active camera
 void update_active_camera(bool chase_camera_active, bool free_camera_active,
 	chase_camera &ccam, free_camera &fcam, target_camera &tcam, mesh &stars, mesh target_mesh, float delta_time, double &cursor_x, double &cursor_y)
 {

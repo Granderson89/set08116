@@ -1,3 +1,8 @@
+// spacecraft.h - Header file containing spacecraft functions
+// Functions to load the Enterprise and Rama and control their
+// motion
+// Last modified - 24/03/2017
+
 #pragma once
 
 #include <glm\glm.hpp>
@@ -7,6 +12,7 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
+// Load the Enterprise
 void load_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, map<string, texture> &textures, array<texture, 2> &motions_textures, map<string, texture> &normal_maps)
 {
 	// ENTERPRISE MESHES
@@ -74,6 +80,7 @@ void load_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, map<st
 	normal_maps["saucer"] = texture("textures/saucer_normal_map.png");
 }
 
+// Load Rama
 void load_rama(mesh &rama, map<string, texture> &textures, map<string, texture> &normal_maps)
 {
 	//RAMA
@@ -100,6 +107,7 @@ void load_rama(mesh &rama, map<string, texture> &textures, map<string, texture> 
 	normal_maps["ramaOut"] = texture("textures/brick_normalmap.jpg");
 }
 
+// User controlled motion of Enterprise
 void move_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, vec3 engage, float delta_time)
 {
 	enterprise[0].get_transform().translate(engage);
@@ -110,6 +118,7 @@ void move_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, vec3 e
 	motions[1].get_transform().rotate(vec3(0.0f, 0.0f, 10.0f * delta_time));
 }
 
+// Rotate Rama
 void spin_rama(mesh &rama, float delta_time)
 {
 	rama.get_transform().rotate(vec3(0.0f, delta_time, 0.0f));

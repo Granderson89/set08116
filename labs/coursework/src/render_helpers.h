@@ -1,3 +1,9 @@
+// render_helpers.h - Header file containing render functions
+// Functions to create a shadow map, render the different
+// objects in the scene and render the fire particle effect
+// render_fire not currently working properly
+// Last modified - 24/03/2017
+
 #pragma once
 
 #include <glm\glm.hpp>
@@ -7,8 +13,7 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
-// Template (effects, meshes, textures, lights, shadow, camera)
-
+// Create a shadow map from the pov of the spot light
 void create_shadow_map(effect shadow_eff, 
 					   map<string, mesh> solar_objects, array<mesh, 7> enterprise, array<mesh, 2> motions,  mesh rama, 
 					   shadow_map &shadow, mat4 &LightProjectionMat)
@@ -90,6 +95,7 @@ void create_shadow_map(effect shadow_eff,
 	glCullFace(GL_BACK);
 }
 
+// Render the clouds around Earth
 void render_clouds(effect cloud_eff, 
 				   mesh clouds, 
 				   texture cloudsTex, texture normal_map, 
@@ -146,6 +152,7 @@ void render_clouds(effect cloud_eff,
 	renderer::render(clouds);
 }
 
+// Render the skybox
 void render_skybox(effect skybox_eff, 
 				   mesh stars, 
 				   cubemap cube_map, 
@@ -171,6 +178,7 @@ void render_skybox(effect skybox_eff,
 	glEnable(GL_CULL_FACE);
 }
 
+// Render the sun, planets etc.
 void render_solar_objects(effect eff, 
 						  mesh m, 
 						  texture tex, texture normal_map, 
@@ -227,6 +235,7 @@ void render_solar_objects(effect eff,
 	renderer::render(m);
 }
 
+// Render the Enterprise (transform hierarchy)
 void render_enterprise(effect ship_eff, 
 					   array<mesh, 7> enterprise, array<mesh, 2> motions,
 					   texture tex, texture normal_map, array<texture, 2> motions_textures,
@@ -316,6 +325,8 @@ void render_enterprise(effect ship_eff,
 	}
 }
 
+
+// Render Rama
 void render_rama(effect outside_eff, effect inside_eff, 
 				 mesh rama, 
 				 texture inside, texture outside, texture grass, texture blend_map, texture normal_outside, texture normal_inside, material mat_inside, 
@@ -405,6 +416,7 @@ void render_rama(effect outside_eff, effect inside_eff,
 	glEnable(GL_CULL_FACE);
 }
 
+// Render fire (not 100% working)
 void render_fire(effect compute_eff, effect smoke_eff, 
 				 mat4 smoke_M, 
 				 texture smoke, 

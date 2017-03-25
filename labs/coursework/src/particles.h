@@ -1,3 +1,6 @@
+// particles.h - Header file containing particle functuions
+// Last modified - 24/03/2017
+
 #pragma once
 
 #include <glm\glm.hpp>

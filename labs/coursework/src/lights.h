@@ -1,3 +1,7 @@
+// lights.h - Header file containing light functions
+// Function to load the lights
+// Last modified - 24/03/2017
+
 #pragma once
 
 #include <glm\glm.hpp>
@@ -7,9 +11,9 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
+// Load the lights
 void load_lights(vector<point_light> &points, vector<spot_light> &spots, vector<point_light> &points_rama, vector<spot_light> &spots_rama, vec3 rama_pos)
 {
-	// LIGHTS
 	// Set point light values, Position
 	points[0].move(vec3(0.0f, 0.0f, 0.0f));
 	// Light colour white

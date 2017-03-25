@@ -1,3 +1,10 @@
+// solar_objects.h - Header file containing functions
+// related to the solar objects in the scene
+// Functions to load the objects, load the shadow plane,
+// make the planets orbit the sun, shrink the sun and form
+// a black hole
+// Last modified - 24/03/2017
+
 #pragma once
 
 #include <glm\glm.hpp>
@@ -7,6 +14,7 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
+// Load all solar objects
 void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &textures, map<string, texture> &normal_maps, map<string, float> &orbit_factors) {
 	// SOLAR OBJECT MESHES
 	solar_objects["sun"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
@@ -96,6 +104,7 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	normal_maps["clouds"] = texture("textures/clouds_normal_map.png");
 }
 
+// Load the shadow plane
 void load_shadow_plane(mesh &shadow_plane, map<string, texture> &textures, map<string, texture> &normal_maps)
 {
 	// DEMO SHADOW PLANE
@@ -185,6 +194,7 @@ void black_hole(mesh &sun, mesh &black_hole, float delta_time)
 	}
 }
 
+// Control motion of all solar objects
 void system_motion(map<string, mesh> &solar_objects, map<string, float> orbit_factors, 
 				   bool destroy_solar_system, float delta_time)
 {

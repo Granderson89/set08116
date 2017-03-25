@@ -1,3 +1,7 @@
+// Solar system model - A simple interactive model of 
+// the solar system with some spacecraft
+// Last modified - 24/03/2017
+
 #include <glm\glm.hpp>
 #include <graphics_framework.h>
 #include "cameras.h"
