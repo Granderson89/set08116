@@ -3,7 +3,7 @@
 // Functions to load the objects, load the shadow plane,
 // make the planets orbit the sun, shrink the sun and form
 // a black hole
-// Last modified - 24/03/2017
+// Last modified - 29/03/2017
 
 #pragma once
 
@@ -23,14 +23,16 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	solar_objects["earth"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["mars"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["clouds"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
-	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_disk(20)));
+	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	//solar_objects["distortion"] = mesh(geometry(geometry_builder::create_torus(100, 100, 0.25, 1.0)));
+	solar_objects["distortion"] = mesh(geometry(geometry_builder::create_disk(100)));
 
 	// TRANSFORM MESHES
 	solar_objects["sun"].get_transform().scale = vec3(8.0f, 8.0f, 8.0f);
 	solar_objects["sun"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
-	solar_objects["black_hole"].get_transform().position = vec3(0.0f, -1.0f, 0.0f);
-	solar_objects["black_hole"].get_transform().rotate(vec3(0.5f, 0.0f, 0.0f));
+	solar_objects["distortion"].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
+	solar_objects["distortion"].get_transform().scale = vec3(3.0f);
 
 	solar_objects["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
 	solar_objects["earth"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
@@ -74,7 +76,7 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	solar_objects["sun"].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	solar_objects["sun"].get_material().set_shininess(25.0f);
 
-	solar_objects["black_hole"].get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	solar_objects["distortion"].get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
 	// OTHER PROPERTIES
 	// Set orbit factors
@@ -94,9 +96,12 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	textures["cloudsTex"] = texture("textures/clouds.png");
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
 
+	textures["distortionTex"] = texture("textures/blackhole.jpg");
+
 	// LOAD NORMAL MAPS
 	normal_maps["sun"] = texture("textures/sun_normal_map.png");
 	normal_maps["black_hole"] = texture("textures/black_hole_normal_map.png");
+	normal_maps["distortion"] = texture("textures/black_hole_normal_map.png");
 	normal_maps["mercury"] = texture("textures/mercury_normal_map.png");
 	normal_maps["venus"] = texture("textures/venus_normal_map.png");
 	normal_maps["earth"] = texture("textures/earth_normal_map.png");
@@ -178,7 +183,7 @@ void orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, fl
 }
 
 // Shrink sun and form a black hole
-void black_hole(mesh &sun, mesh &black_hole, float delta_time)
+void black_hole(mesh &sun, mesh &black_hole, mesh &distortion, float &blur_factor, float delta_time)
 {
 	// If the sun hasn't disappeared yet, shrink it to 0
 	if (sun.get_transform().scale != vec3(0.0f))
@@ -186,11 +191,15 @@ void black_hole(mesh &sun, mesh &black_hole, float delta_time)
 		vec3 sun_size = sun.get_transform().scale;
 		sun.get_transform().scale = max(sun_size - vec3(delta_time, delta_time, delta_time), 0.0f);
 	}
-	// Else, grow the black hole to scale 20
+	// Else, grow the black hole to scale 20 and make the scene
+	// more blurry as it grows
 	else
 	{
+		blur_factor = std::max(blur_factor - 0.001f, 0.3f);
 		vec3 black_hole_size = black_hole.get_transform().scale;
+		vec3 distortion_size = distortion.get_transform().scale;
 		black_hole.get_transform().scale = min(black_hole_size + vec3(delta_time, delta_time, delta_time), 20.0f);
+		distortion.get_transform().scale = min(distortion_size + 2.5f * vec3(delta_time, delta_time, delta_time), 50.0f);
 	}
 }
 
@@ -207,7 +216,7 @@ void system_motion(map<string, mesh> &solar_objects, map<string, float> orbit_fa
 		// The sun and the black hole spin around the origin
 		if (e.first == "sun")
 			m.get_transform().rotate(vec3(0.0f, 0.0f, -delta_time / 2.0f));
-		else if (e.first == "black_hole")
+		else if (e.first == "distortion" || e.first == "black_hole")
 			m.get_transform().rotate(vec3(0.0f, -delta_time / 2.0f, 0.0f));
 		// The clouds rotate faster than the Earth
 		else if (e.first == "clouds")

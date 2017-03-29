@@ -12,6 +12,8 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
+
+
 // Load cameras
 void load_cameras(target_camera &tcam, free_camera &fcam, chase_camera &ccam)
 {

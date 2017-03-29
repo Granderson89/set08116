@@ -9,6 +9,11 @@
 #include <glm\glm.hpp>
 #include <graphics_framework.h>
 
+// Types of fog
+#define FOG_LINEAR 0
+#define FOG_EXP 1
+#define FOG_EXP2 2
+
 using namespace std;
 using namespace graphics_framework;
 using namespace glm;
@@ -196,6 +201,11 @@ void render_solar_objects(effect eff,
 		1,
 		GL_FALSE,
 		value_ptr(MVP));
+	// Set MV matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MV"),
+		1,
+		GL_FALSE,
+		value_ptr(V * M));
 	// Set M matrix uniform
 	glUniformMatrix4fv(eff.get_uniform_location("M"),
 		1,

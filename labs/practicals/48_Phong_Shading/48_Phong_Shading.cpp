@@ -80,7 +80,7 @@ bool load_content() {
 
   // *********************************
   // Load texture
-  tex = texture("textures/earth.tga");
+  tex = texture("textures/checker.png");
   // *********************************
   // ambient intensity (0.3, 0.3, 0.3)
   light.set_ambient_intensity(vec4(0.3f, 0.3f, 0.3f, 1.0f));
