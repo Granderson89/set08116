@@ -5,7 +5,7 @@ using namespace std;
 using namespace graphics_framework;
 using namespace glm;
 
-mesh terr;
+map<string, mesh> meshes;
 effect eff;
 free_camera cam;
 directional_light light;
@@ -148,16 +148,32 @@ void generate_terrain(geometry &geom, const texture &height_map, unsigned int wi
 bool load_content() {
   // Geometry to load into
   geometry geom;
-
+  geometry geom2;
   // Load height map
   texture height_map("textures/heightmap.jpg");
 
   // Generate terrain
-  generate_terrain(geom, height_map, 20, 20, 2.0f);
+  generate_terrain(geom, height_map, 10, 10, 2.0f);
+  // Generate terrain
+  generate_terrain(geom2, height_map, 10, 10, 2.0f);
 
   // Use geometry to create terrain mesh
-  terr = mesh(geom);
-
+  meshes["top"] = mesh(geom);
+  meshes["left"] = mesh(geom);
+  meshes["left"].get_transform().rotate(vec3(0.0f, 0.0f, half_pi<float>()));
+  meshes["left"].get_transform().translate(vec3(-5.0f, -5.0f, 0.0f));
+  meshes["right"] = mesh(geom);
+  meshes["right"].get_transform().rotate(vec3(0.0f, 0.0f, -half_pi<float>()));
+  meshes["right"].get_transform().translate(vec3(5.0f, -5.0f, 0.0f));
+  meshes["bottom"] = mesh(geom);
+  meshes["bottom"].get_transform().rotate(vec3(0.0f, 0.0f, pi<float>()));
+  meshes["bottom"].get_transform().translate(vec3(0.0f, -10.0f, 0.0f));
+  meshes["front"] = mesh(geom);
+  meshes["front"].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
+  meshes["front"].get_transform().translate(vec3(0.0f, -5.0f, 5.0f));
+  meshes["back"] = mesh(geom);
+  meshes["back"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+  meshes["back"].get_transform().translate(vec3(0.0f, -5.0f, -5.0f));
   // Load in necessary shaders
   eff.add_shader("60_Terrain/terrain.vert", GL_VERTEX_SHADER);
   eff.add_shader("60_Terrain/terrain.frag", GL_FRAGMENT_SHADER);
@@ -170,11 +186,13 @@ bool load_content() {
   light.set_ambient_intensity(vec4(0.3f, 0.3f, 0.3f, 1.0f));
   light.set_light_colour(vec4(0.9f, 0.9f, 0.9f, 1.0f));
   light.set_direction(normalize(vec3(1.0f, 1.0f, 1.0f)));
-  terr.get_material().set_diffuse(vec4(0.5f, 0.5f, 0.5f, 1.0f));
-  terr.get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-  terr.get_material().set_shininess(20.0f);
-  terr.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
+  for (auto &e : meshes)
+  {
+	  e.second.get_material().set_diffuse(vec4(0.5f, 0.5f, 0.5f, 1.0f));
+	  e.second.get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	  e.second.get_material().set_shininess(20.0f);
+	  e.second.get_material().set_emissive(vec4(0.0f, 0.0f, 0.0f, 1.0f));
+  }
 
   // terrian trextures
   tex[0] = texture("textures/sand.jpg");
@@ -234,45 +252,48 @@ bool update(float delta_time) {
 }
 
 bool render() {
-  // Bind effect
-  renderer::bind(eff);
-  // Create MVP matrix
-  auto M = terr.get_transform().get_transform_matrix();
-  auto V = cam.get_view();
-  auto P = cam.get_projection();
-  auto MVP = P * V * M;
-  // Set MVP matrix uniform
-  glUniformMatrix4fv(eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
-  // Set M matrix uniform
-  glUniformMatrix4fv(eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
-  // Set N matrix uniform
-  glUniformMatrix3fv(eff.get_uniform_location("N"), 1, GL_FALSE, value_ptr(terr.get_transform().get_normal_matrix()));
-  // *********************************
-  // Set eye_pos uniform to camera position
-  glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam.get_position()));
-  // *********************************
-   //Bind Terrian Material
-  renderer::bind(terr.get_material(), "mat");
-  // Bind Light
-  renderer::bind(light, "light");
-  // Bind Tex[0] to TU 0, set uniform
-  renderer::bind(tex[0], 0);
-  glUniform1i(eff.get_uniform_location("tex[0]"), 0);
-  // *********************************
-   //Bind Tex[1] to TU 1, set uniform
-  renderer::bind(tex[1], 1);
-  glUniform1i(eff.get_uniform_location("tex[1]"), 1);
-  // Bind Tex[2] to TU 2, set uniform
-  renderer::bind(tex[2], 2);
-  glUniform1i(eff.get_uniform_location("tex[2]"), 2);
-  // Bind Tex[3] to TU 3, set uniform
-  renderer::bind(tex[3], 3);
-  glUniform1i(eff.get_uniform_location("tex[3]"), 3);
-  // *********************************
-  // Render terrain
-  renderer::render(terr);
-
-  return true;
+	for (auto &e : meshes)
+	{
+		auto m = e.second;
+		// Bind effect
+		renderer::bind(eff);
+		// Create MVP matrix
+		auto M = m.get_transform().get_transform_matrix();
+		auto V = cam.get_view();
+		auto P = cam.get_projection();
+		auto MVP = P * V * M;
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+		// Set M matrix uniform
+		glUniformMatrix4fv(eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
+		// Set N matrix uniform
+		glUniformMatrix3fv(eff.get_uniform_location("N"), 1, GL_FALSE, value_ptr(m.get_transform().get_normal_matrix()));
+		// *********************************
+		// Set eye_pos uniform to camera position
+		glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam.get_position()));
+		// *********************************
+		 //Bind Terrian Material
+		renderer::bind(m.get_material(), "mat");
+		// Bind Light
+		renderer::bind(light, "light");
+		// Bind Tex[0] to TU 0, set uniform
+		renderer::bind(tex[0], 0);
+		glUniform1i(eff.get_uniform_location("tex[0]"), 0);
+		// *********************************
+		 //Bind Tex[1] to TU 1, set uniform
+		renderer::bind(tex[1], 1);
+		glUniform1i(eff.get_uniform_location("tex[1]"), 1);
+		// Bind Tex[2] to TU 2, set uniform
+		renderer::bind(tex[2], 2);
+		glUniform1i(eff.get_uniform_location("tex[2]"), 2);
+		// Bind Tex[3] to TU 3, set uniform
+		renderer::bind(tex[3], 3);
+		glUniform1i(eff.get_uniform_location("tex[3]"), 3);
+		// *********************************
+		// Render terrain
+		renderer::render(m);
+	}
+	return true;
 }
 
 void main() {

@@ -26,6 +26,7 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	//solar_objects["distortion"] = mesh(geometry(geometry_builder::create_torus(100, 100, 0.25, 1.0)));
 	solar_objects["distortion"] = mesh(geometry(geometry_builder::create_disk(100)));
+	solar_objects["comet"] = mesh(geometry("models/Asteroid.obj"));
 
 	// TRANSFORM MESHES
 	solar_objects["sun"].get_transform().scale = vec3(8.0f, 8.0f, 8.0f);
@@ -56,6 +57,9 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	solar_objects["clouds"].get_transform().position = solar_objects["earth"].get_transform().position;
 	solar_objects["clouds"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
+	solar_objects["comet"].get_transform().position = vec3(0.0f, 0.0f, 50.0f);
+	solar_objects["comet"].get_transform().scale = vec3(0.1f);
+
 	// SET MATERIALS
 	solar_objects["earth"].get_material().set_specular(vec4(1.0f, 0.65f, 0.0f, 1.0f));
 	solar_objects["earth"].get_material().set_shininess(25.0f);
@@ -85,7 +89,8 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	orbit_factors["earth"] = 0.0f;
 	orbit_factors["clouds"] = 0.0f;
 	orbit_factors["mars"] = -0.235f;
-
+	orbit_factors["comet"] = -0.3f;
+	
 	// LOAD TEXTURES
 	// Solar objects
 	textures["sunTex"] = texture("textures/sun_tex.jpg");
@@ -97,6 +102,7 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
 
 	textures["distortionTex"] = texture("textures/blackhole.jpg");
+	textures["cometTex"] = texture("textures/asteroid.jpg");
 
 	// LOAD NORMAL MAPS
 	normal_maps["sun"] = texture("textures/sun_normal_map.png");
@@ -107,6 +113,9 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	normal_maps["earth"] = texture("textures/earth_normal_map.png");
 	normal_maps["mars"] = texture("textures/mars_normal_map.png");
 	normal_maps["clouds"] = texture("textures/clouds_normal_map.png");
+	normal_maps["comet"] = texture("textures/asteroid_normal_map.png");
+
+
 }
 
 // Load the shadow plane
@@ -182,6 +191,56 @@ void orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, fl
 	}
 }
 
+// Define asteroid orbit
+void asteroid_orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, float delta_time)
+{
+	// Get centre of orbit, current position of orbiting
+	// body and it's radius
+	vec3 rotCenter = sun.get_transform().position;
+	float current_y, current_z, rotAngle, radius;
+	current_y = m.get_transform().position.y;
+	current_z = m.get_transform().position.z;
+	radius = distance(m.get_transform().position, rotCenter);
+	// If planet has fallen into black hole, leave it there
+	// and shrink to zero
+	if (radius < 0.3f)
+	{
+		m.get_transform().scale = vec3(0.0f);
+		return;
+	}
+	// Calculate orbit angle, correctint for quadrants of xz axes
+	if (current_y < 0)
+	{
+		if (current_z < 0)
+			rotAngle = atan(current_z / current_y) - radians(180.0f);
+		else
+			rotAngle = atan(current_z / current_y) + radians(180.0f);
+	}
+	else
+		rotAngle = atan(current_z / current_y);
+	// Increment rotAngle to calcualte next position taking into
+	// account the planets unique orbit speed
+	rotAngle = radians(rotAngle * (180.0f / pi<float>()) + 0.5f + orbit_factor);
+	// Correct for full rotation
+	if (rotAngle > radians(360.0f))
+		rotAngle = 0.0f;
+	// Calculate new position
+	float new_y = rotCenter.y + (radius * cosf(rotAngle));
+	float new_z = rotCenter.z + (radius * sinf(rotAngle));
+	vec3 newPos(0, new_y, new_z);
+	m.get_transform().position = newPos;
+	// Spin planet
+	m.get_transform().rotate(vec3(-half_pi<float>() * delta_time, 0.0f, half_pi<float>() * delta_time / 2.0f));
+	// If the black hole has formed then move the planet closer
+	// and shrink
+	if (destroy_solar_system == true && sun.get_transform().scale == vec3(0.0f))
+	{
+		float factor = 1.0f / (radius * radius);
+		m.get_transform().translate(-factor * m.get_transform().position);
+		m.get_transform().scale -= (factor * m.get_transform().scale);
+	}
+}
+
 // Shrink sun and form a black hole
 void black_hole(mesh &sun, mesh &black_hole, mesh &distortion, float &blur_factor, float delta_time)
 {
@@ -218,6 +277,10 @@ void system_motion(map<string, mesh> &solar_objects, map<string, float> orbit_fa
 			m.get_transform().rotate(vec3(0.0f, 0.0f, -delta_time / 2.0f));
 		else if (e.first == "distortion" || e.first == "black_hole")
 			m.get_transform().rotate(vec3(0.0f, -delta_time / 2.0f, 0.0f));
+		else if (e.first == "comet")
+		{
+			asteroid_orbit(m, sun, orbit_factors[e.first], destroy_solar_system, delta_time);
+		}
 		// The clouds rotate faster than the Earth
 		else if (e.first == "clouds")
 		{

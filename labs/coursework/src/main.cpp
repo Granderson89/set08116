@@ -15,6 +15,20 @@ using namespace std::chrono;
 using namespace graphics_framework;
 using namespace glm;
 
+
+// Maximum number of particles
+const unsigned int MAX_PARTICLES = 2 << 11;
+
+vec4 positions[MAX_PARTICLES];
+vec4 velocitys[MAX_PARTICLES];
+
+GLuint G_Position_buffer, G_Velocity_buffer;
+
+effect eff;
+effect compute_eff;
+GLuint vao;
+
+/*
 const unsigned int MAX_PARTICLES = 4096;
 
 vec4 positions[MAX_PARTICLES];
@@ -25,6 +39,7 @@ effect compute_eff;
 GLuint vao;
 texture smoke;
 mat4 smoke_M;
+*/
 
 map<string, mesh> solar_objects;
 array<mesh, 7> enterprise;
@@ -79,6 +94,8 @@ texture alpha_map;
 unsigned int current_frame = 0;
 float blur_factor = 0.9f;
 
+mesh comet;
+
 bool load_content() {
 	// Create frame buffer - use screen width and height
 	frames[0] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
@@ -119,7 +136,7 @@ bool load_content() {
 	vector<string> planet_eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_spot.frag" };
 	planet_eff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	planet_eff.build();
-	
+
 	// Load in shaders for clouds
 	cloud_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
 	vector<string> cloud_eff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag"};
@@ -176,6 +193,7 @@ bool load_content() {
 	cockpit_eff.add_shader("shaders/mask.frag", GL_FRAGMENT_SHADER);
 	cockpit_eff.build();
 
+	/*
 	// PARTICLES
 	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
 	uniform_real_distribution<float> dist;
@@ -213,7 +231,45 @@ bool load_content() {
 	// *********************************
 	//Unbind
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	
+	*/
+	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+	uniform_real_distribution<float> dist;
+
+	// Initilise particles
+	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
+		positions[i] = vec4(((5.0f * dist(rand)) - 7.0f), 8.0f * dist(rand), 0.0f, 0.0f);
+		velocitys[i] = vec4(0.0f, 0.1f + (2.0f * dist(rand)), 0.0f, 0.0f);
+	}
+
+	// Load in shaders
+	eff.add_shader("shaders/basic_colour.vert", GL_VERTEX_SHADER);
+	eff.add_shader("shaders/basic_colour.frag", GL_FRAGMENT_SHADER);
+	eff.build();
+	// Load in shaders
+	compute_eff.add_shader("shaders/particle.comp", GL_COMPUTE_SHADER);
+	compute_eff.build();
+
+	// a useless vao, but we need it bound or we get errors.
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	// *********************************
+	//Generate Position Data buffer
+	glGenBuffers(1, &G_Position_buffer);
+	// Bind as GL_SHADER_STORAGE_BUFFER
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Position_buffer);
+	// Send Data to GPU, use GL_DYNAMIC_DRAW
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(positions[0]) * MAX_PARTICLES, positions, GL_DYNAMIC_DRAW);
+	// Generate Velocity Data buffer
+	glGenBuffers(1, &G_Velocity_buffer);
+	// Bind as GL_SHADER_STORAGE_BUFFER
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
+	// Send Data to GPU, use GL_DYNAMIC_DRAW
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
+	// *********************************
+	//Unbind
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	renderer::setClearColour(0, 0, 0);
 	return true;
 }
 
@@ -224,10 +280,6 @@ bool update(float delta_time) {
 	if (delta_time > 10.0f) {
 		delta_time = 10.0f;
 	}
-	
-	renderer::bind(compute_eff);
-	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, &(vec3(3.0f, 5.0f, 5.0f))[0]);
-	glUniform1f(compute_eff.get_uniform_location("delta_time"), delta_time);
 	// USER CONTROLS
 	// Camera controls
 	// c - switch to chase camera
@@ -282,6 +334,10 @@ bool update(float delta_time) {
 	system_motion(solar_objects, orbit_factors, destroy_solar_system, delta_time);
 
 	target_mesh = solar_objects[target];
+
+	renderer::bind(compute_eff);
+	glUniform1f(compute_eff.get_uniform_location("delta_time"), delta_time);
+	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, value_ptr(vec3(7.0f, 8.0f, 5.0f)));
 
 	// CAMERA MODES
 	// Update depending on active camera
@@ -447,6 +503,9 @@ bool render() {
 			points, spots,
 			shadow, LightProjectionMat,
 			P, V, cam_pos);
+	// Render comet
+	render_solar_objects(planet_eff, solar_objects["comet"], textures["cometTex"], normal_maps["comet"], points, spots, shadow, LightProjectionMat, P, V, cam_pos);
+
 	// Set render target to current frame
 	renderer::set_render_target(frames[current_frame]);
 	// Clear frame
