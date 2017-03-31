@@ -25,10 +25,9 @@ void main() {
   // Sample blur texture
   vec4 blur_sample = texture(tex, tex_coord);
   // Calculate distance from the camera - based on depth sample
-  vec4 depth_sample = texture(depth, tex_coord);
-  float dist = depth_sample.z;
+  float dist = 1.0 - texture(depth, tex_coord).r;
   // Mix samples together based on distance
-  colour = mix(sharp_sample, blur_sample, dist);
+  colour = mix(sharp_sample, blur_sample, clamp(range * abs(focus - dist), 0, 1));
   // Ensure alpha is 1.0
   colour.a = 1.0f;
   // *********************************

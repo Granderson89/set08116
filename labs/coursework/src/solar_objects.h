@@ -194,6 +194,10 @@ void orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, fl
 // Define asteroid orbit
 void asteroid_orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, float delta_time)
 {
+	m.get_transform().translate(vec3(2.0f * delta_time, 0.0f, 2.0f * delta_time));
+	//m.get_transform().rotate(vec3(-half_pi<float>() * delta_time, 0.0f, half_pi<float>() * delta_time / 2.0f));
+
+	/*
 	// Get centre of orbit, current position of orbiting
 	// body and it's radius
 	vec3 rotCenter = sun.get_transform().position;
@@ -239,6 +243,7 @@ void asteroid_orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_s
 		m.get_transform().translate(-factor * m.get_transform().position);
 		m.get_transform().scale -= (factor * m.get_transform().scale);
 	}
+	*/
 }
 
 // Shrink sun and form a black hole

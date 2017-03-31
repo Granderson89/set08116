@@ -482,3 +482,41 @@ void render_fire(effect compute_eff, effect smoke_eff,
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glUseProgram(0);
 }
+
+
+// Render asteroid particles
+void render_particles(effect compute_eff, effect eff,
+					  const unsigned int MAX_PARTICLES, GLuint G_Position_buffer, GLuint G_Velocity_buffer,
+					  mat4 M, mat4 P, mat4 V)
+{
+
+	// Bind Compute Shader
+	renderer::bind(compute_eff);
+	// Bind data as SSBO
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, G_Position_buffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, G_Velocity_buffer);
+	// Dispatch
+	glDispatchCompute(MAX_PARTICLES / 128, 1, 1);
+	// Sync, wait for completion
+	glMemoryBarrier(GL_ALL_BARRIER_BITS);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	// Bind render effect
+	renderer::bind(eff);
+	// Create MVP matrix
+	auto MVP = P * V * M;
+	// Set the colour uniform
+	glUniform4fv(eff.get_uniform_location("colour"), 1, value_ptr(vec4(1.0f)));
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	// Bind position buffer as GL_ARRAY_BUFFER
+	glBindBuffer(GL_ARRAY_BUFFER, G_Position_buffer);
+	// Setup vertex format
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (void *)0);
+	// Render
+	glDrawArrays(GL_POINTS, 0, MAX_PARTICLES);
+	// Tidy up
+	glDisableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glUseProgram(0);
+}

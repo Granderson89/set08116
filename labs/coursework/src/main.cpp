@@ -17,7 +17,7 @@ using namespace glm;
 
 
 // Maximum number of particles
-const unsigned int MAX_PARTICLES = 2 << 11;
+const unsigned int MAX_PARTICLES = 42949;
 
 vec4 positions[MAX_PARTICLES];
 vec4 velocitys[MAX_PARTICLES];
@@ -70,8 +70,8 @@ target_camera tcam;
 free_camera fcam;
 chase_camera ccam;
 mesh target_mesh;
-string target = "earth";
-bool chase_camera_active = false;
+string target = "comet";
+bool chase_camera_active = true;
 bool free_camera_active = false;
 
 vector<point_light> points(1);
@@ -95,6 +95,7 @@ unsigned int current_frame = 0;
 float blur_factor = 0.9f;
 
 mesh comet;
+GLuint pvao;
 
 bool load_content() {
 	// Create frame buffer - use screen width and height
@@ -118,6 +119,7 @@ bool load_content() {
 	load_shadow_plane(shadow_plane, textures, normal_maps);
 	load_lights(points, spots, points_rama, spots_rama, rama.get_transform().position);
 	load_cameras(tcam, fcam, ccam);
+	glGenVertexArrays(1, &pvao);
 
 	shadow = shadow_map(renderer::get_screen_width(), renderer::get_screen_height());
 
@@ -237,7 +239,7 @@ bool load_content() {
 
 	// Initilise particles
 	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-		positions[i] = vec4(((5.0f * dist(rand)) - 7.0f), 8.0f * dist(rand), 0.0f, 0.0f);
+		positions[i] = vec4(((25.0f * dist(rand)) - 7.0f), 25.0f * dist(rand), 100.0f * dist(rand), 0.0f);
 		velocitys[i] = vec4(0.0f, 0.1f + (2.0f * dist(rand)), 0.0f, 0.0f);
 	}
 
@@ -335,9 +337,37 @@ bool update(float delta_time) {
 
 	target_mesh = solar_objects[target];
 
+	// Get centre of orbit, current position of orbiting
+	// body and it's radius
+	vec3 rotCenter = solar_objects["sun"].get_transform().position;
+	float current_y, current_z, rotAngle, radius;
+	current_y = solar_objects["comet"].get_transform().position.y;
+	current_z = solar_objects["comet"].get_transform().position.z;
+	radius = distance(solar_objects["comet"].get_transform().position, rotCenter);
+	// Calculate orbit angle, correctint for quadrants of xz axes
+	if (current_y < 0)
+	{
+		if (current_z < 0)
+			rotAngle = atan(current_z / current_y) - radians(180.0f);
+		else
+			rotAngle = atan(current_z / current_y) + radians(180.0f);
+	}
+	else
+		rotAngle = atan(current_z / current_y);
+
+	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+	uniform_real_distribution<float> dist;
+	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
+		velocitys[i] = vec4(0.0f, 0.1f + (10.0f * dist(rand)) * cosf(rotAngle), 0.1f + (10.0f * dist(rand)) * sinf(rotAngle), 0.0f);
+	}
+	// Bind as GL_SHADER_STORAGE_BUFFER
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
+	// Send Data to GPU, use GL_DYNAMIC_DRAW
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
+
 	renderer::bind(compute_eff);
 	glUniform1f(compute_eff.get_uniform_location("delta_time"), delta_time);
-	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, value_ptr(vec3(7.0f, 8.0f, 5.0f)));
+	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, value_ptr(vec3(100.0f, 100.0f, 100.0f)));
 
 	// CAMERA MODES
 	// Update depending on active camera
@@ -505,7 +535,10 @@ bool render() {
 			P, V, cam_pos);
 	// Render comet
 	render_solar_objects(planet_eff, solar_objects["comet"], textures["cometTex"], normal_maps["comet"], points, spots, shadow, LightProjectionMat, P, V, cam_pos);
-
+	// Render comet particles
+	glBindVertexArray(pvao);
+	render_particles(compute_eff, eff, MAX_PARTICLES, G_Position_buffer, G_Velocity_buffer, solar_objects["comet"].get_transform().get_transform_matrix(), P, V);
+	glBindVertexArray(0);
 	// Set render target to current frame
 	renderer::set_render_target(frames[current_frame]);
 	// Clear frame
