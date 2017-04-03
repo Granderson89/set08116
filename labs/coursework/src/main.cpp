@@ -17,7 +17,7 @@ using namespace glm;
 
 
 // Maximum number of particles
-const unsigned int MAX_PARTICLES = 42949;
+const unsigned int MAX_PARTICLES = 5000;
 
 vec4 positions[MAX_PARTICLES];
 vec4 velocitys[MAX_PARTICLES];
@@ -27,19 +27,6 @@ GLuint G_Position_buffer, G_Velocity_buffer;
 effect eff;
 effect compute_eff;
 GLuint vao;
-
-/*
-const unsigned int MAX_PARTICLES = 4096;
-
-vec4 positions[MAX_PARTICLES];
-vec4 velocitys[MAX_PARTICLES];
-GLuint G_Position_buffer, G_Velocity_buffer;
-effect smoke_eff;
-effect compute_eff;
-GLuint vao;
-texture smoke;
-mat4 smoke_M;
-*/
 
 map<string, mesh> solar_objects;
 array<mesh, 7> enterprise;
@@ -71,7 +58,7 @@ free_camera fcam;
 chase_camera ccam;
 mesh target_mesh;
 string target = "comet";
-bool chase_camera_active = true;
+bool chase_camera_active = false;
 bool free_camera_active = false;
 
 vector<point_light> points(1);
@@ -195,52 +182,14 @@ bool load_content() {
 	cockpit_eff.add_shader("shaders/mask.frag", GL_FRAGMENT_SHADER);
 	cockpit_eff.build();
 
-	/*
 	// PARTICLES
-	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
-	uniform_real_distribution<float> dist;
-	smoke_M = enterprise[0].get_transform().get_transform_matrix();
-	smoke = texture("textures/smoke.png");
-	// Initilise particles
-	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-		positions[i] = vec4(((2.0f * dist(rand)) - 1.0f) / 10.0f, 5.0f * dist(rand), 0.0f, 0.0f);
-		velocitys[i] = vec4(0.0f, 0.1f + dist(rand), 0.0f, 0.0f);
-	}
-	// Load in shaders
-	smoke_eff.add_shader("shaders/smoke.vert", GL_VERTEX_SHADER);
-	smoke_eff.add_shader("shaders/smoke.frag", GL_FRAGMENT_SHADER);
-	smoke_eff.add_shader("shaders/smoke.geom", GL_GEOMETRY_SHADER);
-	smoke_eff.build();
-	// Load in shaders
-	compute_eff.add_shader("shaders/particle.comp", GL_COMPUTE_SHADER);
-	compute_eff.build();
-	// a useless vao, but we need it bound or we get errors.
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-	// *********************************
-	//Generate Position Data buffer
-	glGenBuffers(1, &G_Position_buffer);
-	// Bind as GL_SHADER_STORAGE_BUFFER
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Position_buffer);
-	// Send Data to GPU, use GL_DYNAMIC_DRAW
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(positions[0]) * MAX_PARTICLES, positions, GL_DYNAMIC_DRAW);
-	// Generate Velocity Data buffer
-	glGenBuffers(1, &G_Velocity_buffer);
-	// Bind as GL_SHADER_STORAGE_BUFFER
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
-	// Send Data to GPU, use GL_DYNAMIC_DRAW
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
-	// *********************************
-	//Unbind
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	*/
 	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
 	uniform_real_distribution<float> dist;
 
 	// Initilise particles
 	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-		positions[i] = vec4(((25.0f * dist(rand)) - 7.0f), 25.0f * dist(rand), 100.0f * dist(rand), 0.0f);
-		velocitys[i] = vec4(0.0f, 0.1f + (2.0f * dist(rand)), 0.0f, 0.0f);
+		positions[i] = vec4(((25.0f * dist(rand)) - 10.0f), 40.0f * dist(rand) -20.0f, 50.0f * dist(rand) - 15.0f, 0.0f);
+		velocitys[i] = vec4(-(0.1f + (20.0f * dist(rand))), 0.0f, 0.0f, 0.0f);
 	}
 
 	// Load in shaders
@@ -254,7 +203,6 @@ bool load_content() {
 	// a useless vao, but we need it bound or we get errors.
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
-	// *********************************
 	//Generate Position Data buffer
 	glGenBuffers(1, &G_Position_buffer);
 	// Bind as GL_SHADER_STORAGE_BUFFER
@@ -267,7 +215,6 @@ bool load_content() {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
 	// Send Data to GPU, use GL_DYNAMIC_DRAW
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
-	// *********************************
 	//Unbind
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
@@ -354,12 +301,6 @@ bool update(float delta_time) {
 	}
 	else
 		rotAngle = atan(current_z / current_y);
-
-	default_random_engine rand(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
-	uniform_real_distribution<float> dist;
-	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-		velocitys[i] = vec4(0.0f, 0.1f + (10.0f * dist(rand)) * cosf(rotAngle), 0.1f + (10.0f * dist(rand)) * sinf(rotAngle), 0.0f);
-	}
 	// Bind as GL_SHADER_STORAGE_BUFFER
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
 	// Send Data to GPU, use GL_DYNAMIC_DRAW
@@ -367,7 +308,7 @@ bool update(float delta_time) {
 
 	renderer::bind(compute_eff);
 	glUniform1f(compute_eff.get_uniform_location("delta_time"), delta_time);
-	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, value_ptr(vec3(100.0f, 100.0f, 100.0f)));
+	glUniform3fv(compute_eff.get_uniform_location("max_dims"), 1, value_ptr(vec3(500.0f, 100.0f, 100.0f)));
 
 	// CAMERA MODES
 	// Update depending on active camera
@@ -402,8 +343,6 @@ bool update(float delta_time) {
 		direction = normalize(ray_end_world - ray_start_world);
 		origin = ray_start_world;
 		// Check all the solar_objects for intersection
-		// **Currently only used to check for a sun click
-		// will implement a planet view selection**
 		for (auto &m : solar_objects)
 		{
 			float distance = 0.0f;
@@ -465,7 +404,7 @@ bool render() {
 		// Skip those: with scale of 0 (sucked into black hole),
 		//		       not to be rendered unless sun has been clicked
 		if (e.second.get_transform().scale == vec3(0.0f) ||
-			(e.first == "distortion" && destroy_solar_system == false))
+			((e.first == "distortion" || e.first == "black_hole") && destroy_solar_system == false))
 		{
 			continue;
 		}
@@ -485,15 +424,12 @@ bool render() {
 				points, spots,
 				shadow, LightProjectionMat,
 				P, V, cam_pos);
-		// Render black hole if necessary
+		// Render distortion if necessary
 		else if (e.first == "distortion")
 		{
-			render_solar_objects(distortion_eff,
+			render_distortion(distortion_eff,
 				e.second,
-				textures[e.first + "Tex"],
-				normal_maps[e.first],
-				points, spots,
-				shadow, LightProjectionMat,
+				cube_map,
 				P, V, cam_pos);
 		}
 		// Render planets

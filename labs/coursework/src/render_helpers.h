@@ -245,6 +245,42 @@ void render_solar_objects(effect eff,
 	renderer::render(m);
 }
 
+
+// Render the distortion effect around the black hole
+void render_distortion(effect eff,
+					   mesh m,
+					   cubemap cube_map,
+					   mat4 P, mat4 V, vec3 cam_pos)
+{
+	// Bind effect
+	renderer::bind(eff);
+	// Create MVP matrix
+	auto M = m.get_transform().get_transform_matrix();
+	auto MVP = P * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
+		1,
+		GL_FALSE,
+		value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("M"),
+		1,
+		GL_FALSE,
+		value_ptr(M));
+	// Set N matrix uniform - remember - 3x3 matrix
+	glUniformMatrix3fv(eff.get_uniform_location("N"),
+		1,
+		GL_FALSE,
+		value_ptr(m.get_transform().get_normal_matrix()));
+	// Set eye position- Get this from active camera
+	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind and set textures
+	renderer::bind(cube_map, 0);
+	glUniform1i(eff.get_uniform_location("cubemap"), 0);
+	// Render mesh
+	renderer::render(m);
+}
+
 // Render the Enterprise (transform hierarchy)
 void render_enterprise(effect ship_eff, 
 					   array<mesh, 7> enterprise, array<mesh, 2> motions,
@@ -505,7 +541,7 @@ void render_particles(effect compute_eff, effect eff,
 	// Create MVP matrix
 	auto MVP = P * V * M;
 	// Set the colour uniform
-	glUniform4fv(eff.get_uniform_location("colour"), 1, value_ptr(vec4(1.0f)));
+	glUniform4fv(eff.get_uniform_location("colour"), 1, value_ptr(vec4(0.3f, 0.4f, 0.52f, 0.75f)));
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	// Bind position buffer as GL_ARRAY_BUFFER

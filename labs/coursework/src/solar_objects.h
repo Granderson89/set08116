@@ -194,56 +194,8 @@ void orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, fl
 // Define asteroid orbit
 void asteroid_orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, float delta_time)
 {
-	m.get_transform().translate(vec3(2.0f * delta_time, 0.0f, 2.0f * delta_time));
-	//m.get_transform().rotate(vec3(-half_pi<float>() * delta_time, 0.0f, half_pi<float>() * delta_time / 2.0f));
-
-	/*
-	// Get centre of orbit, current position of orbiting
-	// body and it's radius
-	vec3 rotCenter = sun.get_transform().position;
-	float current_y, current_z, rotAngle, radius;
-	current_y = m.get_transform().position.y;
-	current_z = m.get_transform().position.z;
-	radius = distance(m.get_transform().position, rotCenter);
-	// If planet has fallen into black hole, leave it there
-	// and shrink to zero
-	if (radius < 0.3f)
-	{
-		m.get_transform().scale = vec3(0.0f);
-		return;
-	}
-	// Calculate orbit angle, correctint for quadrants of xz axes
-	if (current_y < 0)
-	{
-		if (current_z < 0)
-			rotAngle = atan(current_z / current_y) - radians(180.0f);
-		else
-			rotAngle = atan(current_z / current_y) + radians(180.0f);
-	}
-	else
-		rotAngle = atan(current_z / current_y);
-	// Increment rotAngle to calcualte next position taking into
-	// account the planets unique orbit speed
-	rotAngle = radians(rotAngle * (180.0f / pi<float>()) + 0.5f + orbit_factor);
-	// Correct for full rotation
-	if (rotAngle > radians(360.0f))
-		rotAngle = 0.0f;
-	// Calculate new position
-	float new_y = rotCenter.y + (radius * cosf(rotAngle));
-	float new_z = rotCenter.z + (radius * sinf(rotAngle));
-	vec3 newPos(0, new_y, new_z);
-	m.get_transform().position = newPos;
-	// Spin planet
-	m.get_transform().rotate(vec3(-half_pi<float>() * delta_time, 0.0f, half_pi<float>() * delta_time / 2.0f));
-	// If the black hole has formed then move the planet closer
-	// and shrink
-	if (destroy_solar_system == true && sun.get_transform().scale == vec3(0.0f))
-	{
-		float factor = 1.0f / (radius * radius);
-		m.get_transform().translate(-factor * m.get_transform().position);
-		m.get_transform().scale -= (factor * m.get_transform().scale);
-	}
-	*/
+	m.get_transform().translate(vec3(2.0f * delta_time, 0.0f, 0.0f));
+	m.get_transform().rotate(vec3(-half_pi<float>() * delta_time, 0.0f, 0.0f));
 }
 
 // Shrink sun and form a black hole
