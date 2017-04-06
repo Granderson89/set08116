@@ -2,7 +2,7 @@
 // Functions to create a shadow map, render the different
 // objects in the scene and render the fire particle effect
 // render_fire not currently working properly
-// Last modified - 24/03/2017
+// Last modified - 06/04/2017
 
 #pragma once
 
@@ -175,6 +175,18 @@ void render_skybox(effect skybox_eff,
 	// Bind the cube map and set it
 	renderer::bind(cube_map, 0);
 	glUniform1i(skybox_eff.get_uniform_location("cubemap"), 0);
+	// *********************************
+	// Set fog colour to the same as the clear colour
+	glUniform4fv(skybox_eff.get_uniform_location("fog_colour"), 1, value_ptr(vec4(0.5f, 0.5f, 0.5f, 1.0f)));
+	// Set fog start:  5.0f
+	glUniform1f(skybox_eff.get_uniform_location("fog_start"), 5.0f);
+	// Set fog end:  100.0f
+	glUniform1f(skybox_eff.get_uniform_location("fog_end"), 100.0f);
+	// Set fog density: 0.04f
+	glUniform1f(skybox_eff.get_uniform_location("fog_density"), 0.04f);
+	// Set fog type: FOG_EXP2
+	glUniform1i(skybox_eff.get_uniform_location("fog_type"), FOG_EXP2);
+	// *********************************
 	// Render the skybox
 	renderer::render(stars);
 	// Enable depth test, depth mask, face culling
@@ -201,11 +213,6 @@ void render_solar_objects(effect eff,
 		1,
 		GL_FALSE,
 		value_ptr(MVP));
-	// Set MV matrix uniform
-	glUniformMatrix4fv(eff.get_uniform_location("MV"),
-		1,
-		GL_FALSE,
-		value_ptr(V * M));
 	// Set M matrix uniform
 	glUniformMatrix4fv(eff.get_uniform_location("M"),
 		1,
@@ -373,9 +380,10 @@ void render_enterprise(effect ship_eff,
 
 
 // Render Rama
-void render_rama(effect outside_eff, effect inside_eff, 
-				 mesh rama, 
-				 texture inside, texture outside, texture grass, texture blend_map, texture normal_outside, texture normal_inside, material mat_inside, 
+void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
+				 mesh rama, array<mesh, 6> rama_terrain,
+				 texture inside, texture outside, texture grass, texture blend_map, texture normal_outside, texture normal_inside, material mat_inside,
+				 array<texture, 4> terrain_texs,
 				 vector<point_light> points, vector<spot_light> spots, vector<point_light> points_rama, vector<spot_light> spots_rama,
 				 shadow_map shadow, mat4 &LightProjectionMat, 
 				 mat4 P, mat4 V, vec3 cam_pos)
@@ -427,13 +435,17 @@ void render_rama(effect outside_eff, effect inside_eff,
 	glUniform1i(outside_eff.get_uniform_location("shadow_map"), 4);
 	// Render mesh
 	renderer::render(rama);
-
-	// Disable depth test,depth mask,face culling
+	
+	// Disable face culling
 	glDisable(GL_CULL_FACE);
 	// Bind effect
 	renderer::bind(inside_eff);
+	// Create MV matrix
+	auto MV = V * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(inside_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+	// Set MV matrix uniform
+	glUniformMatrix4fv(inside_eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(MV));
 	// Set M matrix uniform
 	glUniformMatrix4fv(inside_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
 	// Set N matrix uniform
@@ -458,8 +470,80 @@ void render_rama(effect outside_eff, effect inside_eff,
 	renderer::bind(normal_inside, 1);
 	// Set normal_map uniform
 	glUniform1i(inside_eff.get_uniform_location("normal_map"), 1);
+	// Set fog colour
+	glUniform4fv(inside_eff.get_uniform_location("fog_colour"), 1, value_ptr(vec4(0.412f, 1.0f, 0.996f, 1.0f)));
+	// Set fog start:  5.0f
+	glUniform1f(inside_eff.get_uniform_location("fog_start"), 5.0f);
+	// Set fog end:  100.0f
+	glUniform1f(inside_eff.get_uniform_location("fog_end"), 100.0f);
+	// Set fog density: 0.1f
+	glUniform1f(inside_eff.get_uniform_location("fog_density"), 0.04f);
+	// Set fog type: FOG_EXP2
+	glUniform1i(inside_eff.get_uniform_location("fog_type"), FOG_EXP2);
 	renderer::render(rama);
 	glEnable(GL_CULL_FACE);
+	
+	// Bind effect
+	renderer::bind(terrain_eff);
+	// Get PV
+	const auto PV = P * V;
+	// Set the texture value for the shader here
+	glUniform1i(terrain_eff.get_uniform_location("tex[0]"), 0);
+	glUniform1i(terrain_eff.get_uniform_location("tex[1]"), 1);
+	glUniform1i(terrain_eff.get_uniform_location("tex[2]"), 2);
+	glUniform1i(terrain_eff.get_uniform_location("tex[3]"), 3);
+	// Find the lcoation for the MVP uniform
+	const auto loc = terrain_eff.get_uniform_location("MVP");
+	// Bind material
+	renderer::bind(rama_terrain[0].get_material(), "mat");
+	// Bind point light
+	renderer::bind(points_rama, "points");
+	// Bind spot light
+	renderer::bind(spots_rama, "spots");
+	// Bind texture to renderer
+	renderer::bind(terrain_texs[0], 0);
+	// Bind texture to renderer
+	renderer::bind(terrain_texs[1], 1);
+	// Bind texture to renderer
+	renderer::bind(terrain_texs[2], 2);
+	// Bind texture to renderer
+	renderer::bind(terrain_texs[3], 3);
+	// Set fog colour
+	glUniform4fv(terrain_eff.get_uniform_location("fog_colour"), 1, value_ptr(vec4(0.412f, 1.0f, 0.996f, 1.0f)));
+	// Set fog start:  5.0f
+	glUniform1f(terrain_eff.get_uniform_location("fog_start"), 5.0f);
+	// Set fog end:  100.0f
+	glUniform1f(terrain_eff.get_uniform_location("fog_end"), 100.0f);
+	// Set fog density: 0.1f
+	glUniform1f(terrain_eff.get_uniform_location("fog_density"), 0.04f);
+	// Set fog type: FOG_EXP2
+	glUniform1i(terrain_eff.get_uniform_location("fog_type"), FOG_EXP2);
+	// Set eye position
+	glUniform3fv(terrain_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// THIS SECTION CAUSES THE FRAME RATE TO SLOW BY A FACTOR OF 3!
+	// MUST FIX
+	/*
+	// Render Rama terrain
+	for (size_t i = 0; i < rama_terrain.size(); i++) {
+		// SET M to be the usual mesh transform matrix
+		auto M = rama_terrain[i].get_transform().get_transform_matrix();
+		// Apply the heirarchy chain
+		for (size_t j = i; j > 0; j--) {
+			M = rama_terrain[j - 1].get_transform().get_transform_matrix() * M;
+		}
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(loc, 1, GL_FALSE, value_ptr(PV * M));
+		// Set M matrix uniform
+		glUniformMatrix4fv(terrain_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
+		// Set M matrix uniform
+		glUniformMatrix4fv(terrain_eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(V * M));
+		// Set N matrix uniform
+		glUniformMatrix3fv(terrain_eff.get_uniform_location("N"), 1, GL_FALSE,
+			value_ptr(rama_terrain[i].get_transform().get_normal_matrix()));
+		// Render mesh
+		renderer::render(rama_terrain[i]);
+	}
+	*/
 }
 
 // Render fire (not 100% working)

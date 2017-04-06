@@ -45,7 +45,6 @@ vec4 calculate_spot(in spot_light spot, in material mat, in vec3 position, in ve
 float calculate_shadow(in sampler2D shadow_map, in vec4 light_space_pos);
 vec3 calc_normal(in vec3 normal, in vec3 tangent, in vec3 binormal, in sampler2D normal_map, in vec2 tex_coord);
 
-
 // Point lights for the scene
 uniform point_light points[1];
 // Spot lights for the scene

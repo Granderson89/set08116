@@ -3,7 +3,7 @@
 // Functions to load the objects, load the shadow plane,
 // make the planets orbit the sun, shrink the sun and form
 // a black hole
-// Last modified - 29/03/2017
+// Last modified - 06/04/2017
 
 #pragma once
 
@@ -148,8 +148,8 @@ void orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, fl
 	// body and it's radius
 	vec3 rotCenter = sun.get_transform().position;
 	float current_x, current_z, rotAngle, radius;
-	current_x = m.get_transform().position.x;
-	current_z = m.get_transform().position.z;
+	current_x = m.get_transform().position.x - rotCenter.x;
+	current_z = m.get_transform().position.z - rotCenter.y;
 	radius = distance(m.get_transform().position, rotCenter);
 	// If planet has fallen into black hole, leave it there
 	// and shrink to zero
@@ -177,7 +177,7 @@ void orbit(mesh &m, mesh &sun, float orbit_factor, bool destroy_solar_system, fl
 	// Calculate new position
 	float new_x = rotCenter.x + (radius * cosf(rotAngle));
 	float new_z = rotCenter.z + (radius * sinf(rotAngle));
-	vec3 newPos(new_x, 0, new_z);
+	vec3 newPos(new_x, rotCenter.y, new_z);
 	m.get_transform().position = newPos;
 	// Spin planet
 	m.get_transform().rotate(vec3(0.0f, 0.0f, 2 * delta_time));

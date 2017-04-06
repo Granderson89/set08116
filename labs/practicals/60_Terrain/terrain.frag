@@ -1,3 +1,4 @@
+
 #version 440
 
 // Requires weighted_texture.frag

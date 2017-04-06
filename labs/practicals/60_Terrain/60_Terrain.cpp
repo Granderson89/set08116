@@ -148,32 +148,31 @@ void generate_terrain(geometry &geom, const texture &height_map, unsigned int wi
 bool load_content() {
   // Geometry to load into
   geometry geom;
-  geometry geom2;
   // Load height map
   texture height_map("textures/heightmap.jpg");
 
   // Generate terrain
   generate_terrain(geom, height_map, 10, 10, 2.0f);
-  // Generate terrain
-  generate_terrain(geom2, height_map, 10, 10, 2.0f);
 
   // Use geometry to create terrain mesh
   meshes["top"] = mesh(geom);
+  meshes["top"].get_transform().rotate(vec3(0.0f, 0.0f, pi<float>()));
+  meshes["top"].get_transform().translate(vec3(0.0f, 10.0f, 0.0f));
   meshes["left"] = mesh(geom);
-  meshes["left"].get_transform().rotate(vec3(0.0f, 0.0f, half_pi<float>()));
-  meshes["left"].get_transform().translate(vec3(-5.0f, -5.0f, 0.0f));
+  meshes["left"].get_transform().rotate(vec3(0.0f, 0.0f, -half_pi<float>()));
+  meshes["left"].get_transform().translate(vec3(-5.0f, 5.0f, 0.0f));
   meshes["right"] = mesh(geom);
-  meshes["right"].get_transform().rotate(vec3(0.0f, 0.0f, -half_pi<float>()));
-  meshes["right"].get_transform().translate(vec3(5.0f, -5.0f, 0.0f));
+  meshes["right"].get_transform().rotate(vec3(0.0f, 0.0f, half_pi<float>()));
+  meshes["right"].get_transform().translate(vec3(5.0f, 5.0f, 0.0f));
   meshes["bottom"] = mesh(geom);
-  meshes["bottom"].get_transform().rotate(vec3(0.0f, 0.0f, pi<float>()));
   meshes["bottom"].get_transform().translate(vec3(0.0f, -10.0f, 0.0f));
+  meshes["bottom"].get_transform().scale = vec3(4.0f, 1.0f, 1.0f);
   meshes["front"] = mesh(geom);
-  meshes["front"].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
-  meshes["front"].get_transform().translate(vec3(0.0f, -5.0f, 5.0f));
+  meshes["front"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+  meshes["front"].get_transform().translate(vec3(0.0f, 5.0f, 5.0f));
   meshes["back"] = mesh(geom);
-  meshes["back"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
-  meshes["back"].get_transform().translate(vec3(0.0f, -5.0f, -5.0f));
+  meshes["back"].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
+  meshes["back"].get_transform().translate(vec3(0.0f, 5.0f, -5.0f));
   // Load in necessary shaders
   eff.add_shader("60_Terrain/terrain.vert", GL_VERTEX_SHADER);
   eff.add_shader("60_Terrain/terrain.frag", GL_FRAGMENT_SHADER);

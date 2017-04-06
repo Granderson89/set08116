@@ -2,6 +2,8 @@
 
 // Model view projection matrix
 uniform mat4 MVP;
+// MV transformation
+uniform mat4 MV;
 // The transformation matrix
 uniform mat4 M;
 // The normal matrix
@@ -32,6 +34,8 @@ layout(location = 3) out vec3 tangent_out;
 layout(location = 4) out vec3 binormal_out;
 // Outgoing position in light space
 layout (location = 5) out vec4 light_space_pos;
+// Camera space position
+layout(location = 6) out vec4 CS_position;
 
 void main()
 {
@@ -39,6 +43,8 @@ void main()
 	gl_Position = MVP * vec4(position, 1.0f);
 	// Calculate world position of vertex
 	vertex_position = vec3(M * vec4(position, 1.0f));
+	// Calculate camera space position
+	CS_position = MV * vec4(position, 1.0);
 	// Pass through texture coord
 	tex_coord_out = tex_coord_in;
 	// Transform normal (reverse because point light is inside sun)

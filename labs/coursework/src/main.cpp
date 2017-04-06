@@ -1,6 +1,6 @@
 // Solar system model - A simple interactive model of 
 // the solar system with some spacecraft
-// Last modified - 29/03/2017
+// Last modified - 06/04/2017
 
 #include <glm\glm.hpp>
 #include <graphics_framework.h>
@@ -32,6 +32,7 @@ map<string, mesh> solar_objects;
 array<mesh, 7> enterprise;
 array<mesh, 2> motions;
 mesh rama;
+array<mesh, 6> rama_terrain;
 mesh shadow_plane;
 mesh stars;
 cubemap cube_map;
@@ -43,6 +44,7 @@ effect sun_eff;
 effect distortion_eff;
 effect ship_eff;
 effect inside_eff;
+effect terrain_eff;
 effect outside_eff;
 effect shadow_eff;
 effect tex_eff;
@@ -50,6 +52,7 @@ effect motion_blur;
 effect cockpit_eff;
 
 map<string, texture> textures;
+array<texture, 4> terrain_texs;
 map<string, texture> normal_maps;
 array<texture, 2> motions_textures;
 
@@ -102,16 +105,13 @@ bool load_content() {
 
 	load_solar_objects(solar_objects, textures, normal_maps, orbit_factors);
 	load_enterprise(enterprise, motions, textures, motions_textures, normal_maps);
-	load_rama(rama, textures, normal_maps);
+	load_rama(rama, rama_terrain, textures, terrain_texs, normal_maps);
 	load_shadow_plane(shadow_plane, textures, normal_maps);
 	load_lights(points, spots, points_rama, spots_rama, rama.get_transform().position);
 	load_cameras(tcam, fcam, ccam);
 	glGenVertexArrays(1, &pvao);
 
 	shadow = shadow_map(renderer::get_screen_width(), renderer::get_screen_height());
-
-	// Set the clear colour to be a light grey, the same as our fog.
-	renderer::setClearColour(0.5f, 0.5f, 0.5f);
 
 	// SKYBOX
 	stars = mesh(geometry_builder::create_box());
@@ -122,13 +122,13 @@ bool load_content() {
 	// SHADERS
 	// Load in shaders for planets
 	planet_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
-	vector<string> planet_eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_spot.frag" };
+	vector<string> planet_eff_frag_shaders{ "shaders/simple_texture.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_spot.frag", "shaders/part_fog.frag" };
 	planet_eff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	planet_eff.build();
 
 	// Load in shaders for clouds
 	cloud_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
-	vector<string> cloud_eff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag"};
+	vector<string> cloud_eff_frag_shaders{ "shaders/cloud_texture.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_fog.frag" };
 	cloud_eff.add_shader(cloud_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	cloud_eff.build();
 	
@@ -150,11 +150,15 @@ bool load_content() {
 
 	// Load in shaders for rama
 	inside_eff.add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
-	vector<string> inside_eff_frag_shaders{ "shaders/inside.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
+	vector<string> inside_eff_frag_shaders{ "shaders/inside.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_fog.frag" };
 	inside_eff.add_shader(inside_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	inside_eff.build();
 
-	// Load in shaders for rama
+	terrain_eff.add_shader("shaders/terrain.vert", GL_VERTEX_SHADER);
+	vector<string> terrain_eff_frag_shaders{ "shaders/terrain.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_weighted_texture_4.frag", "shaders/part_fog.frag" };
+	terrain_eff.add_shader(terrain_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	terrain_eff.build();
+
 	outside_eff.add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
 	vector<string> outside_eff_frag_shaders{ "shaders/blend.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
 	outside_eff.add_shader(outside_eff_frag_shaders, GL_FRAGMENT_SHADER);
@@ -162,7 +166,8 @@ bool load_content() {
 
 	// Load in shaders for skybox
 	skybox_eff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
-	skybox_eff.add_shader("shaders/skybox.frag", GL_FRAGMENT_SHADER);
+	vector<string> skybox_eff_frag_shaders {"shaders/skybox.frag", "shaders/part_fog.frag" };
+	skybox_eff.add_shader(skybox_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	skybox_eff.build();
 
 	// Load in shadow shaders
@@ -188,8 +193,8 @@ bool load_content() {
 
 	// Initilise particles
 	for (unsigned int i = 0; i < MAX_PARTICLES; ++i) {
-		positions[i] = vec4(((25.0f * dist(rand)) - 10.0f), 40.0f * dist(rand) -20.0f, 50.0f * dist(rand) - 15.0f, 0.0f);
-		velocitys[i] = vec4(-(0.1f + (20.0f * dist(rand))), 0.0f, 0.0f, 0.0f);
+		positions[i] = vec4(-(400.0f * dist(rand)), 40.0f * dist(rand) - 20.0f, 50.0f * dist(rand) - 15.0f, 0.0f);
+		velocitys[i] = vec4(-(100.0f + (20.0f * dist(rand))), 0.0f, 0.0f, 0.0f);
 	}
 
 	// Load in shaders
@@ -217,8 +222,6 @@ bool load_content() {
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(velocitys[0]) * MAX_PARTICLES, velocitys, GL_DYNAMIC_DRAW);
 	//Unbind
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-	renderer::setClearColour(0, 0, 0);
 	return true;
 }
 
@@ -277,30 +280,13 @@ bool update(float delta_time) {
 	// Move enterprise
 	move_enterprise(enterprise, motions, engage, delta_time);
 	// Spin rama
-	spin_rama(rama, delta_time);
+	spin_rama(rama, rama_terrain[0], delta_time);
 
 	// ORBITS
 	system_motion(solar_objects, orbit_factors, destroy_solar_system, delta_time);
 
 	target_mesh = solar_objects[target];
 
-	// Get centre of orbit, current position of orbiting
-	// body and it's radius
-	vec3 rotCenter = solar_objects["sun"].get_transform().position;
-	float current_y, current_z, rotAngle, radius;
-	current_y = solar_objects["comet"].get_transform().position.y;
-	current_z = solar_objects["comet"].get_transform().position.z;
-	radius = distance(solar_objects["comet"].get_transform().position, rotCenter);
-	// Calculate orbit angle, correctint for quadrants of xz axes
-	if (current_y < 0)
-	{
-		if (current_z < 0)
-			rotAngle = atan(current_z / current_y) - radians(180.0f);
-		else
-			rotAngle = atan(current_z / current_y) + radians(180.0f);
-	}
-	else
-		rotAngle = atan(current_z / current_y);
 	// Bind as GL_SHADER_STORAGE_BUFFER
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, G_Velocity_buffer);
 	// Send Data to GPU, use GL_DYNAMIC_DRAW
@@ -455,9 +441,10 @@ bool render() {
 		G_Position_buffer, G_Velocity_buffer, MAX_PARTICLES,
 		P, V, cam_pos);*/
 		// Render rama
-	render_rama(outside_eff, inside_eff,
-		rama,
+	render_rama(outside_eff, inside_eff, terrain_eff,
+		rama, rama_terrain,
 		textures["ramaInTex"], textures["ramaOutTex"], textures["ramaGrassTex"], textures["blend_map"], normal_maps["ramaOut"], normal_maps["earth"], solar_objects["earth"].get_material(),
+		terrain_texs,
 		points, spots, points_rama, spots_rama,
 		shadow, LightProjectionMat,
 		P, V, cam_pos);
