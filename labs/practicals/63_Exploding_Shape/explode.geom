@@ -20,17 +20,24 @@ void main() {
   vec3 V0 = P0 - P1;
   vec3 V1 = P2 - P1;
   vec3 face_normal = normalize(cross(V1, V0));
-
-  for (int i = 0; i < 3; i++) {
     // *********************************
     // Change triangle position += vec4(face_normal, 0.0) * explode_factor
-	gl_Position = gl_in[i].gl_Position + vec4(face_normal, 0.0f) * explode_factor;
+	gl_Position = gl_in[0].gl_Position + vec4(face_normal, 0.0f) * explode_factor;
+    //Colour the vertex with the normal
+	colour_out = vec4(face_normal, 1.0f);
+    // Emit Vertex
+	EmitVertex();
+	gl_Position = gl_in[1].gl_Position;
+    //Colour the vertex with the normal
+	colour_out = vec4(face_normal, 1.0f);
+    // Emit Vertex
+	EmitVertex();
+	gl_Position = gl_in[2].gl_Position;
     //Colour the vertex with the normal
 	colour_out = vec4(face_normal, 1.0f);
     // Emit Vertex
 	EmitVertex();
     // *********************************
-  }
   // End Primitive
   EndPrimitive();
 }

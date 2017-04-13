@@ -10,6 +10,8 @@ effect eff;
 target_camera cam;
 float explode_factor = 0.0f;
 
+float total_time;
+
 bool load_content() {
   // Create a cylinder
   sphere = mesh(geometry_builder::create_sphere(100, 100));
@@ -45,6 +47,14 @@ bool update(float delta_time) {
   if (glfwGetKey(renderer::get_window(), GLFW_KEY_DOWN)) {
     sphere.get_transform().rotate(vec3(-pi<float>(), 0.0f, 0.0f) * delta_time);
   }
+
+  // Accumulate time
+  total_time += delta_time;
+  // Update the explode_factor - base on sin wave
+  explode_factor = 0.0f + sinf(total_time);
+  sphere.get_transform().rotate(vec3(0.0f, 0.0f, -delta_time / 2.0f));
+
+
   // *********************************
   // Use o and p to modify explode factor =/- 0.1f
   if (glfwGetKey(renderer::get_window(), 'O')) {
@@ -58,7 +68,6 @@ bool update(float delta_time) {
 
   return true;
 }
-
 
 bool render() {
   // Bind effect

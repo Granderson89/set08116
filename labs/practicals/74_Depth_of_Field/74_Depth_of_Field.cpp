@@ -309,7 +309,7 @@ bool render() {
   // - range distance to chaser (get from camera)
   // - focus 0.3
   glUniform1f(dof.get_uniform_location("range"), distance(cam.get_position(), cam.get_target_pos()));
-  glUniform1f(dof.get_uniform_location("focus"), 1.0f);
+  glUniform1f(dof.get_uniform_location("focus"), 0.3f);
   // Render the screen quad
   renderer::render(screen_quad);
   // *********************************

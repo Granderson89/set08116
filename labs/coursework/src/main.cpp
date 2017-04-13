@@ -1,6 +1,6 @@
 // Solar system model - A simple interactive model of 
 // the solar system with some spacecraft
-// Last modified - 06/04/2017
+// Last modified - 07/04/2017
 
 #include <glm\glm.hpp>
 #include <graphics_framework.h>
@@ -14,7 +14,6 @@ using namespace std;
 using namespace std::chrono;
 using namespace graphics_framework;
 using namespace glm;
-
 
 // Maximum number of particles
 const unsigned int MAX_PARTICLES = 5000;
@@ -50,8 +49,10 @@ effect shadow_eff;
 effect tex_eff;
 effect motion_blur;
 effect cockpit_eff;
+effect weather_eff;
 
 map<string, texture> textures;
+array<texture, 14> jupiter_texs;
 array<texture, 4> terrain_texs;
 map<string, texture> normal_maps;
 array<texture, 2> motions_textures;
@@ -60,7 +61,7 @@ target_camera tcam;
 free_camera fcam;
 chase_camera ccam;
 mesh target_mesh;
-string target = "comet";
+string target = "earth";
 bool chase_camera_active = false;
 bool free_camera_active = false;
 
@@ -87,7 +88,49 @@ float blur_factor = 0.9f;
 mesh comet;
 GLuint pvao;
 
+float total_time;
+float explode_factor = 0.0f;
+float random = 0.0f;
+default_random_engine generator;
+uniform_int_distribution<int> distribution(1, 10);
+uniform_real_distribution<float> distribution_y(-8, 8);
+uniform_real_distribution<float> distribution_theta(0, 2 * pi<float>());
+float peak_factor = 2.5f;
+vec3 sun_activity;
+
+effect blur;
+effect dof;
+frame_buffer first_pass;
+frame_buffer temp_frames[2];
+
+float weather_factor;
+
+vec3 generate_random_sphere_point(float radius)
+{
+	float y = distribution_y(generator);
+	float theta = distribution_theta(generator);
+	float lat = asinf (y / radius);
+	float x = radius * cosf(lat)*cosf(theta);
+	float z = radius * cosf(lat)*sinf(theta);
+	return vec3(x, y, z);
+}
+
 bool load_content() {
+	// Create 2 frame buffers - use screen width and height
+	temp_frames[0] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
+	temp_frames[1] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
+	// Create a first_pass frame
+	first_pass = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
+
+	// Load in blur
+	blur.add_shader("shaders/screen.vert", GL_VERTEX_SHADER);
+	blur.add_shader("shaders/blur.frag", GL_FRAGMENT_SHADER);
+	// Load in depth of field effect
+	dof.add_shader("shaders/screen.vert", GL_VERTEX_SHADER);
+	dof.add_shader("shaders/depth_of_field.frag", GL_FRAGMENT_SHADER);
+	blur.build();
+	dof.build();
+
 	// Create frame buffer - use screen width and height
 	frames[0] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
 	frames[1] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
@@ -103,7 +146,7 @@ bool load_content() {
 
 	alpha_map = texture("textures/cockpit.jpg");
 
-	load_solar_objects(solar_objects, textures, normal_maps, orbit_factors);
+	load_solar_objects(solar_objects, textures, jupiter_texs, normal_maps, orbit_factors);
 	load_enterprise(enterprise, motions, textures, motions_textures, normal_maps);
 	load_rama(rama, rama_terrain, textures, terrain_texs, normal_maps);
 	load_shadow_plane(shadow_plane, textures, normal_maps);
@@ -135,6 +178,7 @@ bool load_content() {
 	// Load in shaders for sun
 	sun_eff.add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
 	sun_eff.add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	sun_eff.add_shader("shaders/explode.geom", GL_GEOMETRY_SHADER);
 	sun_eff.build();
 
 	// Load in shaders for black hole
@@ -163,6 +207,12 @@ bool load_content() {
 	vector<string> outside_eff_frag_shaders{ "shaders/blend.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
 	outside_eff.add_shader(outside_eff_frag_shaders, GL_FRAGMENT_SHADER);
 	outside_eff.build();
+
+	// Load in shaders for weather changes
+	weather_eff.add_shader("shaders/weather.vert", GL_VERTEX_SHADER);
+	vector<string> weather_eff_frag_shaders{ "shaders/weather.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag" };
+	weather_eff.add_shader(weather_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	weather_eff.build();
 
 	// Load in shaders for skybox
 	skybox_eff.add_shader("shaders/skybox.vert", GL_VERTEX_SHADER);
@@ -232,6 +282,38 @@ bool update(float delta_time) {
 	if (delta_time > 10.0f) {
 		delta_time = 10.0f;
 	}
+
+	// Accumulate time
+	total_time += delta_time;
+
+	// If random number between 1 and 10 is greater than 8
+	// then increase the peak_factor, else decrease it till
+	// it reaches it's minimum of 2.5
+	if (random > 2.0f)
+		peak_factor = std::min(peak_factor + 0.01f, 5.0f);
+	else
+		peak_factor = std::max(peak_factor - 0.01f, 2.5f);
+
+	// Update the explode_factor - base on sin wave
+	explode_factor = std::max(0.25f, abs(0.0f + sinf(total_time)));
+
+	// Only update random when total_time modulo 10 is less than 0.5
+	// This gives time for the change in explode factor to be noticed
+	if (mod(total_time, 10.0f) <= 0.1f)
+	{
+		random = distribution(generator);
+	}
+	if (mod(total_time, 20.0f) <= 0.1f)
+	{
+		sun_activity = generate_random_sphere_point(8.0f);
+		peak_factor = 0.0f;
+	}
+
+	// Update the weather_factor
+	weather_factor += 0.01f;
+	if (weather_factor > 0.99f)
+		weather_factor = 0.0f;
+
 	// USER CONTROLS
 	// Camera controls
 	// c - switch to chase camera
@@ -374,145 +456,334 @@ bool render() {
 		V = tcam.get_view();
 		P = tcam.get_projection();
 	}
+
 	// Render to shadow map
 	mat4 LightProjectionMat;
 	create_shadow_map(shadow_eff,
 		solar_objects, enterprise, motions, rama,
 		shadow, LightProjectionMat);
-	// Render to frame buffer
-	renderer::set_render_target(temp_frame);
-	// Clear frame
-	renderer::clear();
-	// Render background
-	render_skybox(skybox_eff, stars, cube_map, P, V);
-	// Render solar objects
-	for (auto &e : solar_objects) {
-		// Skip those: with scale of 0 (sucked into black hole),
-		//		       not to be rendered unless sun has been clicked
-		if (e.second.get_transform().scale == vec3(0.0f) ||
-			((e.first == "distortion" || e.first == "black_hole") && destroy_solar_system == false))
-		{
-			continue;
+
+	frame_buffer last_pass;
+	if (!chase_camera_active)
+	{
+		// MOTION BLUR
+		// Render to frame buffer
+		renderer::set_render_target(temp_frame);
+		// Clear frame
+		renderer::clear();
+		// Render background
+		render_skybox(skybox_eff, stars, cube_map, P, V);
+		// Render solar objects
+		for (auto &e : solar_objects) {
+			// Skip those: with scale of 0 (sucked into black hole),
+			//		       not to be rendered unless sun has been clicked
+			if (e.second.get_transform().scale == vec3(0.0f) ||
+				((e.first == "distortion" || e.first == "black_hole") && destroy_solar_system == false))
+			{
+				continue;
+			}
+			// Render clouds (if the earth hasn't been sucked into the black hole)
+			else if (e.first == "clouds" && solar_objects["earth"].get_transform().scale != vec3(0.0f))
+			{
+				render_clouds(cloud_eff,
+					solar_objects["clouds"],
+					textures["cloudsTex"], normal_maps["clouds"],
+					points,
+					shadow, LightProjectionMat,
+					P, V, cam_pos);
+					
+			}
+			// Render sun
+			else if (e.first == "sun")
+			{
+				glDisable(GL_CULL_FACE);
+				render_solar_objects(sun_eff,
+					solar_objects[e.first],
+					textures[e.first + "Tex"], normal_maps[e.first],
+					points, spots,
+					shadow, LightProjectionMat,
+					P, V, cam_pos, explode_factor, peak_factor, sun_activity);
+				glEnable(GL_CULL_FACE);
+			}
+			// Render distortion if necessary
+			else if (e.first == "distortion")
+			{
+				render_distortion(distortion_eff,
+					e.second,
+					cube_map,
+					P, V, cam_pos);
+			}
+			// Render Jupiter
+			else if (e.first == "jupiter")
+			{
+				render_jupiter(weather_eff,
+					e.second,
+					jupiter_texs,
+					points, spots, 
+					shadow, LightProjectionMat, 
+					P, V, cam_pos, weather_factor);
+			}
+			// Render planets
+			else
+			{
+				render_solar_objects(planet_eff,
+					solar_objects[e.first],
+					textures[e.first + "Tex"], normal_maps[e.first],
+					points, spots,
+					shadow, LightProjectionMat,
+					P, V, cam_pos, explode_factor, total_time, sun_activity);
+			}
 		}
-		// Render clouds (if the earth hasn't been sucked into the black hole)
-		else if (e.first == "clouds" && solar_objects["earth"].get_transform().scale != vec3(0.0f))
-			render_clouds(cloud_eff,
-				solar_objects["clouds"],
-				textures["cloudsTex"], normal_maps["clouds"],
-				points,
-				shadow, LightProjectionMat,
-				P, V, cam_pos);
-		// Render sun
-		else if (e.first == "sun")
-			render_solar_objects(sun_eff,
-				solar_objects[e.first],
-				textures[e.first + "Tex"], normal_maps[e.first],
-				points, spots,
-				shadow, LightProjectionMat,
-				P, V, cam_pos);
-		// Render distortion if necessary
-		else if (e.first == "distortion")
-		{
-			render_distortion(distortion_eff,
-				e.second,
-				cube_map,
-				P, V, cam_pos);
-		}
-		// Render planets
-		else
+		// Render the Enterprise
+		render_enterprise(ship_eff,
+			enterprise, motions,
+			textures["enterprise"], normal_maps["saucer"], motions_textures,
+			points, spots,
+			shadow, LightProjectionMat,
+			P, V, cam_pos);
+		// Render fire (currently makes the previously renderered object disappear???)
+		/*render_fire(compute_eff, smoke_eff,
+			smoke_M,
+			smoke,
+			G_Position_buffer, G_Velocity_buffer, MAX_PARTICLES,
+			P, V, cam_pos);*/
+			// Render rama
+		render_rama(outside_eff, inside_eff, terrain_eff,
+			rama, rama_terrain,
+			textures["ramaInTex"], textures["ramaOutTex"], textures["ramaGrassTex"], textures["blend_map"], normal_maps["ramaOut"], normal_maps["earth"], solar_objects["earth"].get_material(),
+			terrain_texs,
+			points, spots, points_rama, spots_rama,
+			shadow, LightProjectionMat,
+			P, V, cam_pos);
+		// Render shadow plane if necessary
+		if (demo_shadow == true)
 			render_solar_objects(planet_eff,
-				solar_objects[e.first],
-				textures[e.first + "Tex"], normal_maps[e.first],
+				shadow_plane,
+				textures["planeTex"], normal_maps["plane"],
 				points, spots,
 				shadow, LightProjectionMat,
-				P, V, cam_pos);
+				P, V, cam_pos, explode_factor, total_time, sun_activity);
+		// Render comet
+		render_solar_objects(planet_eff, solar_objects["comet"], textures["cometTex"], normal_maps["comet"], points, spots, shadow, LightProjectionMat, P, V, cam_pos, explode_factor, total_time, sun_activity);
+		// Render comet particles
+		glBindVertexArray(pvao);
+		render_particles(compute_eff, eff, MAX_PARTICLES, G_Position_buffer, G_Velocity_buffer, solar_objects["comet"].get_transform().get_transform_matrix(), P, V);
+		glBindVertexArray(0);
+
+		// Set render target to current frame
+		renderer::set_render_target(frames[current_frame]);
+		// Clear frame
+		renderer::clear();
+		// Bind motion blur effect
+		renderer::bind(motion_blur);
+		// MVP is now the identity matrix
+		mat4 MVP(1.0f);
+		// Set MVP matrix uniform
+		glUniformMatrix4fv(motion_blur.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+		// Bind tempframe to TU 0.
+		renderer::bind(temp_frame.get_frame(), 0);
+		// Bind frames[(current_frame + 1) % 2] to TU 1.
+		renderer::bind(frames[(current_frame + 1) % 2].get_frame(), 1);
+		// Set tex uniforms
+		glUniform1i(motion_blur.get_uniform_location("previous_frame"), 0);
+		glUniform1i(motion_blur.get_uniform_location("tex"), 1);
+		// Set blur factor
+		glUniform1f(motion_blur.get_uniform_location("blend_factor"), blur_factor);
+		// Render screen quad
+		renderer::render(screen_quad);
+
+		// Set render target back to the screen
+		renderer::set_render_target();
+		// Clear frame
+		renderer::clear();
+		if (free_camera_active)
+		{
+			// Bind Cockpit effect
+			renderer::bind(cockpit_eff);
+			// Set MVP matrix uniform
+			glUniformMatrix4fv(cockpit_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+			// Bind texture from frame buffer
+			renderer::bind(frames[current_frame].get_frame(), 0);
+			// Set the tex uniform
+			glUniform1i(cockpit_eff.get_uniform_location("tex"), 0);
+			// Bind alpha map
+			renderer::bind(alpha_map, 1);
+			// Set the alpha map uniform
+			glUniform1i(cockpit_eff.get_uniform_location("alpha_map"), 1);
+		}
+		else
+		{
+			// Bind Tex effect
+			renderer::bind(tex_eff);
+			// Set MVP matrix uniform
+			glUniformMatrix4fv(tex_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+			// Bind texture from frame buffer
+			renderer::bind(frames[current_frame].get_frame(), 0);
+			// Set the tex uniform
+			glUniform1i(tex_eff.get_uniform_location("tex"), 0);
+		}
 	}
-	// Render the Enterprise
-	render_enterprise(ship_eff,
-		enterprise, motions,
-		textures["enterprise"], normal_maps["saucer"], motions_textures,
-		points, spots,
-		shadow, LightProjectionMat,
-		P, V, cam_pos);
-	// Render fire (currently makes the previously renderered object disappear???)
-	/*render_fire(compute_eff, smoke_eff,
+	else
+	{
+		// CHASE CAMERA BLUR
+		// !!!!!!!!!!!!!!! FIRST PASS !!!!!!!!!!!!!!!!
+		// *********************************
+		// Set render target to first_pass
+		renderer::set_render_target(first_pass);
+		// Clear frame
+		renderer::clear();
+		// *********************************
+		// Render background
+		render_skybox(skybox_eff, stars, cube_map, P, V);
+		// Render solar objects
+		for (auto &e : solar_objects) {
+			// Skip those: with scale of 0 (sucked into black hole),
+			//		       not to be rendered unless sun has been clicked
+			if (e.second.get_transform().scale == vec3(0.0f) ||
+				((e.first == "distortion" || e.first == "black_hole") && destroy_solar_system == false))
+			{
+				continue;
+			}
+			// Render clouds (if the earth hasn't been sucked into the black hole)
+			else if (e.first == "clouds" && solar_objects["earth"].get_transform().scale != vec3(0.0f))
+				render_clouds(cloud_eff,
+					solar_objects["clouds"],
+					textures["cloudsTex"], normal_maps["clouds"],
+					points,
+					shadow, LightProjectionMat,
+					P, V, cam_pos);
+			// Render sun
+			else if (e.first == "sun")
+			{
+				glDisable(GL_CULL_FACE);
+				render_solar_objects(sun_eff,
+					solar_objects[e.first],
+					textures[e.first + "Tex"], normal_maps[e.first],
+					points, spots,
+					shadow, LightProjectionMat,
+					P, V, cam_pos, explode_factor, peak_factor, sun_activity);
+				glEnable(GL_CULL_FACE);
+			}
+			// Render distortion if necessary
+			else if (e.first == "distortion")
+			{
+				render_distortion(distortion_eff,
+					e.second,
+					cube_map,
+					P, V, cam_pos);
+			}
+			else if (e.first == "jupiter")
+			{
+				render_jupiter(weather_eff,
+					e.second,
+					jupiter_texs,
+					points, spots,
+					shadow, LightProjectionMat,
+					P, V, cam_pos, weather_factor);
+			}
+			// Render planets
+			else
+				render_solar_objects(planet_eff,
+					solar_objects[e.first],
+					textures[e.first + "Tex"], normal_maps[e.first],
+					points, spots,
+					shadow, LightProjectionMat,
+					P, V, cam_pos, explode_factor, total_time, sun_activity);
+		}
+		// Render the Enterprise
+		render_enterprise(ship_eff,
+			enterprise, motions,
+			textures["enterprise"], normal_maps["saucer"], motions_textures,
+			points, spots,
+			shadow, LightProjectionMat,
+			P, V, cam_pos);
+		// Render fire (currently makes the previously renderered object disappear???)
+		/*render_fire(compute_eff, smoke_eff,
 		smoke_M,
 		smoke,
 		G_Position_buffer, G_Velocity_buffer, MAX_PARTICLES,
 		P, V, cam_pos);*/
 		// Render rama
-	render_rama(outside_eff, inside_eff, terrain_eff,
-		rama, rama_terrain,
-		textures["ramaInTex"], textures["ramaOutTex"], textures["ramaGrassTex"], textures["blend_map"], normal_maps["ramaOut"], normal_maps["earth"], solar_objects["earth"].get_material(),
-		terrain_texs,
-		points, spots, points_rama, spots_rama,
-		shadow, LightProjectionMat,
-		P, V, cam_pos);
-	// Render shadow plane if necessary
-	if (demo_shadow == true)
-		render_solar_objects(planet_eff,
-			shadow_plane,
-			textures["planeTex"], normal_maps["plane"],
-			points, spots,
+		render_rama(outside_eff, inside_eff, terrain_eff,
+			rama, rama_terrain,
+			textures["ramaInTex"], textures["ramaOutTex"], textures["ramaGrassTex"], textures["blend_map"], normal_maps["ramaOut"], normal_maps["earth"], solar_objects["earth"].get_material(),
+			terrain_texs,
+			points, spots, points_rama, spots_rama,
 			shadow, LightProjectionMat,
 			P, V, cam_pos);
-	// Render comet
-	render_solar_objects(planet_eff, solar_objects["comet"], textures["cometTex"], normal_maps["comet"], points, spots, shadow, LightProjectionMat, P, V, cam_pos);
-	// Render comet particles
-	glBindVertexArray(pvao);
-	render_particles(compute_eff, eff, MAX_PARTICLES, G_Position_buffer, G_Velocity_buffer, solar_objects["comet"].get_transform().get_transform_matrix(), P, V);
-	glBindVertexArray(0);
-	// Set render target to current frame
-	renderer::set_render_target(frames[current_frame]);
-	// Clear frame
-	renderer::clear();
-	// Bind motion blur effect
-	renderer::bind(motion_blur);
-	// MVP is now the identity matrix
-	mat4 MVP(1.0f);
-	// Set MVP matrix uniform
-	glUniformMatrix4fv(motion_blur.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
-	// Bind tempframe to TU 0.
-	renderer::bind(temp_frame.get_frame(), 0);
-	// Bind frames[(current_frame + 1) % 2] to TU 1.
-	renderer::bind(frames[(current_frame + 1) % 2].get_frame(), 1);
-	// Set tex uniforms
-	glUniform1i(motion_blur.get_uniform_location("previous_frame"), 0);
-	glUniform1i(motion_blur.get_uniform_location("tex"), 1);
-	// Set blur factor
-	glUniform1f(motion_blur.get_uniform_location("blend_factor"), blur_factor);
-	// Render screen quad
-	renderer::render(screen_quad);
+		// Render shadow plane if necessary
+		if (demo_shadow == true)
+			render_solar_objects(planet_eff,
+				shadow_plane,
+				textures["planeTex"], normal_maps["plane"],
+				points, spots,
+				shadow, LightProjectionMat,
+				P, V, cam_pos, explode_factor, total_time, sun_activity);
+		// Render comet
+		render_solar_objects(planet_eff, solar_objects["comet"], textures["cometTex"], normal_maps["comet"], points, spots, shadow, LightProjectionMat, P, V, cam_pos, explode_factor, total_time, sun_activity);
+		// Render comet particles
+		glBindVertexArray(pvao);
+		render_particles(compute_eff, eff, MAX_PARTICLES, G_Position_buffer, G_Velocity_buffer, solar_objects["comet"].get_transform().get_transform_matrix(), P, V);
+		glBindVertexArray(0);
 
-	// Set render target back to the screen
-	renderer::set_render_target();
-	// Clear frame
-	renderer::clear();
-	if (free_camera_active)
-	{
-		// Bind Cockpit effect
-		renderer::bind(cockpit_eff);
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(cockpit_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
-		// Bind texture from frame buffer
-		renderer::bind(frames[current_frame].get_frame(), 0);
-		// Set the tex uniform
-		glUniform1i(cockpit_eff.get_uniform_location("tex"), 0);
-		// Bind alpha map
-		renderer::bind(alpha_map, 1);
-		// Set the alpha map uniform
-		glUniform1i(cockpit_eff.get_uniform_location("alpha_map"), 1);
-	}
-	else
-	{
-		// Bind Tex effect
-		renderer::bind(tex_eff);
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(tex_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
-		// Bind texture from frame buffer
-		renderer::bind(frames[current_frame].get_frame(), 0);
-		// Set the tex uniform
-		glUniform1i(tex_eff.get_uniform_location("tex"), 0);
+		// !!!!!!!!!!!!!!! SECOND PASS !!!!!!!!!!!!!!!!
+
+		last_pass = first_pass;
+
+
+		// *********************************
+		// Perform blur twice
+		for (int i = 0; i < 2; i++)
+		{
+			// Set render target to temp_frames[i]
+			renderer::set_render_target(temp_frames[i]);
+			// Clear frame
+			renderer::clear();
+			// Bind motion blur effect
+			renderer::bind(blur);
+			// MVP is now the identity matrix
+			mat4 MVP(1.0f);
+			// Set MVP matrix uniform
+			glUniformMatrix4fv(blur.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+			// Bind frames
+			renderer::bind(last_pass.get_frame(), 0);
+			// Set inverse width
+			glUniform1f(blur.get_uniform_location("inverse_width"), 1.0f / renderer::get_screen_width());
+			// Set inverse height
+			glUniform1f(blur.get_uniform_location("inverse_height"), 1.0f / renderer::get_screen_height());
+			// Render screen quad
+			renderer::render(screen_quad);
+			// Set last pass to this pass
+			last_pass = temp_frames[i];
+		}
+		// Set render target back to the screen
+		renderer::set_render_target();
+		// Clear frame
+		renderer::clear();
+		//Bid Dof effect
+		renderer::bind(dof);
+		// Set MVP matrix uniform, identity
+		mat4 MVP(1.0f);
+		glUniformMatrix4fv(dof.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
+		// Bind texture from last pass, 0
+		renderer::bind(last_pass.get_frame(), 0);
+		// Set the uniform, 0
+		glUniform1i(dof.get_uniform_location("tex"), 0);
+		// Sharp texture is taken from first pass
+		// bind first pass, 1
+		renderer::bind(first_pass.get_frame(), 1);
+		//set sharp tex uniform, 1
+		glUniform1i(dof.get_uniform_location("sharp"), 1);
+		// Depth also taken from first pass
+		// bind first pass **depth** to  TU 2
+		renderer::bind(first_pass.get_depth(), 2);
+		//set depth tex uniform, 2
+		glUniform1i(dof.get_uniform_location("depth"), 2);
+		// Set range and focus values
+		// - range distance to chaser (get from camera)
+		// - focus 0.07f
+		glUniform1f(dof.get_uniform_location("range"), distance(ccam.get_position(), solar_objects["earth"].get_transform().position));
+		glUniform1f(dof.get_uniform_location("focus"), 0.07f);
 	}
 	// Render the screen quad
 	renderer::render(screen_quad);

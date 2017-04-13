@@ -57,6 +57,9 @@ void chase_camera_update(chase_camera &ccam, float delta_time, mesh target_mesh,
 	ccam.rotate(vec3(delta_y, delta_x, 0.0f));
 	// Move camera - update target position and rotation
 	ccam.move(target_mesh.get_transform().position, vec3(0.0f, 0.0f, 0.0f));
+	// Move offset depending on scale of target mesh
+	if (target_mesh.get_transform().scale.x > 5.0f)
+		ccam.set_pos_offset(vec3(0.0f, 12.0f, 60.0f));
 	// Update the camera
 	ccam.update(delta_time);
 	// Update cursor pos

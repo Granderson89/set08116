@@ -201,7 +201,7 @@ void render_solar_objects(effect eff,
 						  texture tex, texture normal_map, 
 						  vector<point_light> points, vector<spot_light> spots, 
 						  shadow_map shadow, mat4 LightProjectionMat, 
-						  mat4 P, mat4 V, vec3 cam_pos)
+						  mat4 P, mat4 V, vec3 cam_pos, float explode_factor, float peak_factor, vec3 sun_activity)
 {
 	// Bind effect
 	renderer::bind(eff);
@@ -248,10 +248,74 @@ void render_solar_objects(effect eff,
 	renderer::bind(shadow.buffer->get_depth(), 2);
 	// Set the shadow_map uniform
 	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
+	// Set explode factor uniform
+	glUniform1f(eff.get_uniform_location("explode_factor"), explode_factor);
+	// Set explode factor uniform
+	glUniform1f(eff.get_uniform_location("peak_factor"), peak_factor);
+	// Set explode factor uniform
+	glUniform3fv(eff.get_uniform_location("sun_activity"), 1, value_ptr(sun_activity));
 	// Render mesh
 	renderer::render(m);
 }
 
+// Render Jupiter
+void render_jupiter(effect eff,
+	mesh m,
+	array<texture, 14> texs,
+	vector<point_light> points, vector<spot_light> spots,
+	shadow_map shadow, mat4 LightProjectionMat,
+	mat4 P, mat4 V, vec3 cam_pos, float weather_factor)
+{
+	// Bind effect
+	renderer::bind(eff);
+	// Create MVP matrix
+	auto M = m.get_transform().get_transform_matrix();
+	auto MVP = P * V * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
+		1,
+		GL_FALSE,
+		value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("M"),
+		1,
+		GL_FALSE,
+		value_ptr(M));
+	// Set N matrix uniform - remember - 3x3 matrix
+	glUniformMatrix3fv(eff.get_uniform_location("N"),
+		1,
+		GL_FALSE,
+		value_ptr(m.get_transform().get_normal_matrix()));
+	// Set lightMVP uniform
+	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
+	glUniformMatrix4fv(eff.get_uniform_location("lightMVP"),
+		1,
+		GL_FALSE,
+		value_ptr(lightMVP));
+	// Bind material
+	renderer::bind(m.get_material(), "mat");
+	// Bind light
+	renderer::bind(points, "points");
+	// Bind spot light
+	renderer::bind(spots, "spots");
+	for (int i = 0; i < texs.size(); i++)
+	{
+		// Bind and set textures
+		renderer::bind(texs[i], i);
+		string uniform = "tex[" + to_string(i) + "]";
+		glUniform1i(eff.get_uniform_location(uniform), i);
+	}
+	// Set eye position- Get this from active camera
+	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind shadow map texture
+	renderer::bind(shadow.buffer->get_depth(), 14);
+	// Set the shadow_map uniform
+	glUniform1i(eff.get_uniform_location("shadow_map"), 14);
+	// Set weather factor
+	glUniform1f(eff.get_uniform_location("weather_factor"), weather_factor);
+	// Render mesh
+	renderer::render(m);
+}
 
 // Render the distortion effect around the black hole
 void render_distortion(effect eff,

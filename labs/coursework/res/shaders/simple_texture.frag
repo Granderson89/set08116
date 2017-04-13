@@ -89,12 +89,12 @@ void main() {
 	// Sum point lights
 	for (int i = 0; i < 1; ++i)
 	{
-		colour += calculate_point(points[i], mat, vertex_position, new_normal, view_dir, tex_colour);
+		colour += calculate_point(points[i], mat, vertex_position, transformed_normal, view_dir, tex_colour);
 	}
 	// Sum spot lights
 	for (int i = 0; i < 1; ++i)
 	{
-		colour += calculate_spot(spots[i], mat, vertex_position, new_normal, view_dir, tex_colour) * shade;
+		colour += calculate_spot(spots[i], mat, vertex_position, transformed_normal, view_dir, tex_colour) * shade;
 	}
 	// Set alpha to 1.0f
 	colour.a = 1.0f;

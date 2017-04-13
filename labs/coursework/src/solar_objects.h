@@ -15,46 +15,53 @@ using namespace graphics_framework;
 using namespace glm;
 
 // Load all solar objects
-void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &textures, map<string, texture> &normal_maps, map<string, float> &orbit_factors) {
-	// SOLAR OBJECT MESHES
+void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &textures, array<texture, 14> &jupiter_texs, map<string, texture> &normal_maps, map<string, float> &orbit_factors) {
+	// SOLAR OBJECT MESHES 
 	solar_objects["sun"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["mercury"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["venus"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["earth"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["mars"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
+	solar_objects["jupiter"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["clouds"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	solar_objects["black_hole"] = mesh(geometry(geometry_builder::create_sphere(100, 100)));
 	//solar_objects["distortion"] = mesh(geometry(geometry_builder::create_torus(100, 100, 0.25, 1.0)));
 	solar_objects["distortion"] = mesh(geometry(geometry_builder::create_disk(100)));
 	solar_objects["comet"] = mesh(geometry("models/Asteroid.obj"));
-
+	
 	// TRANSFORM MESHES
+	solar_objects["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
+	solar_objects["earth"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+	solar_objects["earth"].get_transform().rotate(vec3(0.0f, 0.0f, radians(23.44)));
+	solar_objects["earth"].get_transform().scale = vec3(2.0f);
+
+	vec3 earth_scale = solar_objects["earth"].get_transform().scale;
+	vec3 earth_position = solar_objects["earth"].get_transform().position;
+
 	solar_objects["sun"].get_transform().scale = vec3(8.0f, 8.0f, 8.0f);
 	solar_objects["sun"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
 	solar_objects["distortion"].get_transform().rotate(vec3(half_pi<float>(), 0.0f, 0.0f));
 	solar_objects["distortion"].get_transform().scale = vec3(3.0f);
 
-	solar_objects["earth"].get_transform().translate(vec3(20.0f, 0.0f, -40.0f));
-	solar_objects["earth"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
-	solar_objects["earth"].get_transform().rotate(vec3(0.0f, 0.0f, radians(23.44)));
-
-	solar_objects["mercury"].get_transform().scale = 0.3f * solar_objects["venus"].get_transform().scale;
-	solar_objects["mercury"].get_transform().translate(0.39f * solar_objects["earth"].get_transform().position);
+	solar_objects["mercury"].get_transform().scale = 0.3f * earth_scale;
+	solar_objects["mercury"].get_transform().translate(0.39f * earth_position);
 	solar_objects["mercury"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
-	solar_objects["venus"].get_transform().scale = vec3(2.0f);
+	solar_objects["venus"].get_transform().scale = 0.8f * earth_scale;
 	solar_objects["venus"].get_transform().translate(0.72f * solar_objects["earth"].get_transform().position);
 	solar_objects["venus"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
-	solar_objects["earth"].get_transform().scale = solar_objects["venus"].get_transform().scale;
-
-	solar_objects["mars"].get_transform().scale = 0.53f * solar_objects["venus"].get_transform().scale;
-	solar_objects["mars"].get_transform().translate(1.52f * solar_objects["earth"].get_transform().position);
+	solar_objects["mars"].get_transform().scale = 0.53f * earth_scale;
+	solar_objects["mars"].get_transform().translate(1.52f * earth_position);
 	solar_objects["mars"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
-	solar_objects["clouds"].get_transform().scale = vec3(1.01f) * solar_objects["earth"].get_transform().scale;
-	solar_objects["clouds"].get_transform().position = solar_objects["earth"].get_transform().position;
+	solar_objects["jupiter"].get_transform().scale = 11.2f * earth_scale;
+	solar_objects["jupiter"].get_transform().translate(5.2f * earth_position);
+	solar_objects["jupiter"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
+
+	solar_objects["clouds"].get_transform().scale = vec3(1.01f) * earth_scale;
+	solar_objects["clouds"].get_transform().position = earth_position;
 	solar_objects["clouds"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
 	solar_objects["comet"].get_transform().position = vec3(0.0f, 0.0f, 50.0f);
@@ -76,6 +83,9 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	solar_objects["mercury"].get_material().set_specular(vec4(0.256777, 0.137622, 0.086014, 1.0f));
 	solar_objects["mercury"].get_material().set_shininess(12.8f);
 
+	solar_objects["jupiter"].get_material().set_specular(vec4(0.25f, 0.1625f, 0.0f, 1.0f));
+	solar_objects["jupiter"].get_material().set_shininess(2.0f);
+
 	solar_objects["sun"].get_material().set_emissive(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	solar_objects["sun"].get_material().set_specular(vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	solar_objects["sun"].get_material().set_shininess(25.0f);
@@ -89,7 +99,7 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	orbit_factors["earth"] = 0.0f;
 	orbit_factors["clouds"] = 0.0f;
 	orbit_factors["mars"] = -0.235f;
-	orbit_factors["comet"] = -0.3f;
+	orbit_factors["jupiter"] = -0.4f;
 	
 	// LOAD TEXTURES
 	// Solar objects
@@ -100,9 +110,23 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	textures["marsTex"] = texture("textures/mars.jpg");
 	textures["cloudsTex"] = texture("textures/clouds.png");
 	textures["black_holeTex"] = texture("textures/blackhole.jpg");
-
 	textures["distortionTex"] = texture("textures/blackhole.jpg");
 	textures["cometTex"] = texture("textures/asteroid.jpg");
+
+	jupiter_texs[0] = texture("textures/jupiter1.gif");
+	jupiter_texs[1] = texture("textures/jupiter2.gif");
+	jupiter_texs[2] = texture("textures/jupiter3.gif");
+	jupiter_texs[3] = texture("textures/jupiter4.gif");
+	jupiter_texs[4] = texture("textures/jupiter5.gif");
+	jupiter_texs[5] = texture("textures/jupiter6.gif");
+	jupiter_texs[6] = texture("textures/jupiter7.gif");
+	jupiter_texs[7] = texture("textures/jupiter8.gif");
+	jupiter_texs[8] = texture("textures/jupiter9.gif");
+	jupiter_texs[9] = texture("textures/jupiter10.gif");
+	jupiter_texs[10] = texture("textures/jupiter11.gif");
+	jupiter_texs[11] = texture("textures/jupiter12.gif");
+	jupiter_texs[12] = texture("textures/jupiter13.gif");
+	jupiter_texs[13] = texture("textures/jupiter14.gif");
 
 	// LOAD NORMAL MAPS
 	normal_maps["sun"] = texture("textures/sun_normal_map.png");
@@ -114,8 +138,6 @@ void load_solar_objects(map<string, mesh> &solar_objects, map<string, texture> &
 	normal_maps["mars"] = texture("textures/mars_normal_map.png");
 	normal_maps["clouds"] = texture("textures/clouds_normal_map.png");
 	normal_maps["comet"] = texture("textures/asteroid_normal_map.png");
-
-
 }
 
 // Load the shadow plane
@@ -231,7 +253,9 @@ void system_motion(map<string, mesh> &solar_objects, map<string, float> orbit_fa
 		auto &m = e.second;
 		// The sun and the black hole spin around the origin
 		if (e.first == "sun")
+		{
 			m.get_transform().rotate(vec3(0.0f, 0.0f, -delta_time / 2.0f));
+		}
 		else if (e.first == "distortion" || e.first == "black_hole")
 			m.get_transform().rotate(vec3(0.0f, -delta_time / 2.0f, 0.0f));
 		else if (e.first == "comet")
