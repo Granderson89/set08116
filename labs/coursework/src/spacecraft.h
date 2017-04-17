@@ -1,7 +1,8 @@
 // spacecraft.h - Header file containing spacecraft functions
 // Functions to load the Enterprise and Rama and control their
 // motion
-// Last modified - 06/04/2017
+// Generate terrain creates terrain for use inside Rama
+// Last modified - 17/04/2017
 
 #pragma once
 
@@ -148,7 +149,7 @@ void generate_terrain(geometry &geom, const texture &height_map, unsigned int wi
 }
 
 // Load the Enterprise
-void load_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, map<string, texture> &textures, array<texture, 2> &motions_textures, map<string, texture> &normal_maps)
+void load_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, map<string, texture> &textures, array<texture, 2> &motions_textures, map<string, texture> &normal_maps, map<string, effect> &effects)
 {
 	// ENTERPRISE MESHES
 	// Saucer section
@@ -213,10 +214,17 @@ void load_enterprise(array<mesh, 7> &enterprise, array<mesh, 2> &motions, map<st
 	motions_textures[1] = texture("textures/white.jpg");
 	// LOAD NORMAL MAPS
 	normal_maps["saucer"] = texture("textures/saucer_normal_map.png");
+
+	// SHADERS
+	// Load in shaders for enterprise
+	effects["ship_eff"].add_shader("shaders/enterprise.vert", GL_VERTEX_SHADER);
+	vector<string> ship_eff_frag_shaders{ "shaders/enterprise.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
+	effects["ship_eff"].add_shader(ship_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	effects["ship_eff"].build();
 }
 
 // Load Rama
-void load_rama(mesh &rama, array<mesh, 6> &rama_terrain, map<string, texture> &textures, array<texture, 4> &terrain_texs, map<string, texture> &normal_maps)
+void load_rama(mesh &rama, array<mesh, 6> &rama_terrain, map<string, texture> &textures, array<texture, 4> &terrain_texs, map<string, texture> &normal_maps, map<string, effect> &effects)
 {
 	//RAMA
 	rama = mesh(geometry_builder::create_cylinder(100, 100));
@@ -282,6 +290,23 @@ void load_rama(mesh &rama, array<mesh, 6> &rama_terrain, map<string, texture> &t
 	terrain_texs[1] = texture("textures/grass.jpg");
 	terrain_texs[2] = texture("textures/stone.jpg");
 	terrain_texs[3] = texture("textures/snow.jpg");
+
+	// SHADERS
+	// Load in shaders for rama
+	effects["inside_eff"].add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
+	vector<string> inside_eff_frag_shaders{ "shaders/inside.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag", "shaders/part_fog.frag" };
+	effects["inside_eff"].add_shader(inside_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	effects["inside_eff"].build();
+
+	effects["terrain_eff"].add_shader("shaders/terrain.vert", GL_VERTEX_SHADER);
+	vector<string> terrain_eff_frag_shaders{ "shaders/terrain.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_weighted_texture_4.frag", "shaders/part_fog.frag" };
+	effects["terrain_eff"].add_shader(terrain_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	effects["terrain_eff"].build();
+
+	effects["outside_eff"].add_shader("shaders/planet_shader.vert", GL_VERTEX_SHADER);
+	vector<string> outside_eff_frag_shaders{ "shaders/blend.frag", "shaders/part_spot.frag", "shaders/part_point.frag", "shaders/part_shadow.frag", "shaders/part_normal_map.frag" };
+	effects["outside_eff"].add_shader(outside_eff_frag_shaders, GL_FRAGMENT_SHADER);
+	effects["outside_eff"].build();
 }
 
 // User controlled motion of Enterprise

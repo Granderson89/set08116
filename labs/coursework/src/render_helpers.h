@@ -106,13 +106,13 @@ void render_clouds(effect cloud_eff,
 				   texture cloudsTex, texture normal_map, 
 				   vector<point_light> points, 
 				   shadow_map shadow, mat4 LightProjectionMat, 
-				   mat4 P, mat4 V, vec3 cam_pos)
+				   mat4 PV, vec3 cam_pos)
 {
 	// Render clouds
 	renderer::bind(cloud_eff);
 	// Create MVP matrix
 	auto M = clouds.get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
+	auto MVP = PV * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(cloud_eff.get_uniform_location("MVP"),
 		1,
@@ -161,7 +161,7 @@ void render_clouds(effect cloud_eff,
 void render_skybox(effect skybox_eff, 
 				   mesh stars, 
 				   cubemap cube_map, 
-				   mat4 P, mat4 V)
+				   mat4 PV)
 {
 	// Disable depth test, depth mask, face culling
 	glDisable(GL_DEPTH_TEST);
@@ -170,7 +170,7 @@ void render_skybox(effect skybox_eff,
 	// Bind skybox effect
 	renderer::bind(skybox_eff);
 	// Calculate MVP for the skybox
-	auto MVP = P * V * stars.get_transform().get_transform_matrix();
+	auto MVP = PV * stars.get_transform().get_transform_matrix();
 	glUniformMatrix4fv(skybox_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	// Bind the cube map and set it
 	renderer::bind(cube_map, 0);
@@ -196,18 +196,76 @@ void render_skybox(effect skybox_eff,
 }
 
 // Render the sun, planets etc.
-void render_solar_objects(effect eff, 
-						  mesh m, 
-						  texture tex, texture normal_map, 
-						  vector<point_light> points, vector<spot_light> spots, 
-						  shadow_map shadow, mat4 LightProjectionMat, 
-						  mat4 P, mat4 V, vec3 cam_pos, float explode_factor, float peak_factor, vec3 sun_activity)
+void render_solar_objects(effect eff,
+	mesh m,
+	texture tex, texture normal_map,
+	vector<point_light> points, vector<spot_light> spots,
+	shadow_map shadow, mat4 LightProjectionMat,
+	mat4 PV, vec3 cam_pos)
 {
 	// Bind effect
 	renderer::bind(eff);
 	// Create MVP matrix
 	auto M = m.get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
+	auto MVP = PV * M;
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
+		1,
+		GL_FALSE,
+		value_ptr(MVP));
+	// Set M matrix uniform
+	glUniformMatrix4fv(eff.get_uniform_location("M"),
+		1,
+		GL_FALSE,
+		value_ptr(M));
+	// Set N matrix uniform - remember - 3x3 matrix
+	glUniformMatrix3fv(eff.get_uniform_location("N"),
+		1,
+		GL_FALSE,
+		value_ptr(m.get_transform().get_normal_matrix()));
+	// Set lightMVP uniform
+	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
+	glUniformMatrix4fv(eff.get_uniform_location("lightMVP"),
+		1,
+		GL_FALSE,
+		value_ptr(lightMVP));
+	// Bind material
+	renderer::bind(m.get_material(), "mat");
+	// Bind light
+	renderer::bind(points, "points");
+	// Bind spot light
+	renderer::bind(spots, "spots");
+	// Bind and set textures
+	renderer::bind(tex, 0);
+	glUniform1i(eff.get_uniform_location("tex"), 0);
+	// Bind normal_map
+	renderer::bind(normal_map, 1);
+	// Set normal_map uniform
+	glUniform1i(eff.get_uniform_location("normal_map"), 1);
+	// Set eye position- Get this from active camera
+	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind shadow map texture
+	renderer::bind(shadow.buffer->get_depth(), 2);
+	// Set the shadow_map uniform
+	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
+	// Render mesh
+	renderer::render(m);
+}
+
+
+// Render the sun, planets etc.
+void render_sun(effect eff, 
+						  mesh m, 
+						  texture tex, texture normal_map, 
+						  vector<point_light> points, vector<spot_light> spots, 
+						  shadow_map shadow, mat4 LightProjectionMat, 
+						  mat4 PV, vec3 cam_pos, float explode_factor, float peak_factor, vec3 sun_activity)
+{
+	// Bind effect
+	renderer::bind(eff);
+	// Create MVP matrix
+	auto M = m.get_transform().get_transform_matrix();
+	auto MVP = PV * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
 		1,
@@ -264,13 +322,13 @@ void render_jupiter(effect eff,
 	array<texture, 14> texs,
 	vector<point_light> points, vector<spot_light> spots,
 	shadow_map shadow, mat4 LightProjectionMat,
-	mat4 P, mat4 V, vec3 cam_pos, float weather_factor)
+	mat4 PV, vec3 cam_pos, float weather_factor)
 {
 	// Bind effect
 	renderer::bind(eff);
 	// Create MVP matrix
 	auto M = m.get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
+	auto MVP = PV * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
 		1,
@@ -317,53 +375,16 @@ void render_jupiter(effect eff,
 	renderer::render(m);
 }
 
-// Render the distortion effect around the black hole
-void render_distortion(effect eff,
-					   mesh m,
-					   cubemap cube_map,
-					   mat4 P, mat4 V, vec3 cam_pos)
-{
-	// Bind effect
-	renderer::bind(eff);
-	// Create MVP matrix
-	auto M = m.get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
-	// Set MVP matrix uniform
-	glUniformMatrix4fv(eff.get_uniform_location("MVP"),
-		1,
-		GL_FALSE,
-		value_ptr(MVP));
-	// Set M matrix uniform
-	glUniformMatrix4fv(eff.get_uniform_location("M"),
-		1,
-		GL_FALSE,
-		value_ptr(M));
-	// Set N matrix uniform - remember - 3x3 matrix
-	glUniformMatrix3fv(eff.get_uniform_location("N"),
-		1,
-		GL_FALSE,
-		value_ptr(m.get_transform().get_normal_matrix()));
-	// Set eye position- Get this from active camera
-	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind and set textures
-	renderer::bind(cube_map, 0);
-	glUniform1i(eff.get_uniform_location("cubemap"), 0);
-	// Render mesh
-	renderer::render(m);
-}
-
 // Render the Enterprise (transform hierarchy)
 void render_enterprise(effect ship_eff, 
 					   array<mesh, 7> enterprise, array<mesh, 2> motions,
 					   texture tex, texture normal_map, array<texture, 2> motions_textures,
 					   vector<point_light> points, vector<spot_light> spots,
 					   shadow_map shadow, mat4 &LightProjectionMat, 
-					   mat4 P, mat4 V, vec3 cam_pos)
+					   mat4 PV, vec3 cam_pos)
 {
 	// Bind effect
 	renderer::bind(ship_eff);
-	// Get PV
-	const auto PV = P * V;
 	// Set the texture value for the shader here
 	glUniform1i(ship_eff.get_uniform_location("tex"), 0);
 	// Find the lcoation for the MVP uniform
@@ -450,13 +471,13 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 				 array<texture, 4> terrain_texs,
 				 vector<point_light> points, vector<spot_light> spots, vector<point_light> points_rama, vector<spot_light> spots_rama,
 				 shadow_map shadow, mat4 &LightProjectionMat, 
-				 mat4 P, mat4 V, vec3 cam_pos)
+				 mat4 PV, mat4 V, vec3 cam_pos)
 {
 	// Bind effect
 	renderer::bind(outside_eff);
 	// Create MVP matrix
 	auto M = rama.get_transform().get_transform_matrix();
-	auto MVP = P * V * M;
+	auto MVP = PV * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(outside_eff.get_uniform_location("MVP"), 1, GL_FALSE, value_ptr(MVP));
 	// Set M matrix uniform
@@ -550,7 +571,6 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 	// Bind effect
 	renderer::bind(terrain_eff);
 	// Get PV
-	const auto PV = P * V;
 	// Set the texture value for the shader here
 	glUniform1i(terrain_eff.get_uniform_location("tex[0]"), 0);
 	glUniform1i(terrain_eff.get_uniform_location("tex[1]"), 1);
@@ -610,68 +630,10 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 	*/
 }
 
-// Render fire (not 100% working)
-void render_fire(effect compute_eff, effect smoke_eff, 
-				 mat4 smoke_M, 
-				 texture smoke, 
-				 GLuint G_Position_buffer, GLuint G_Velocity_buffer, const unsigned int MAX_PARTICLES, 
-				 mat4 P, mat4 V, vec3 cam_pos)
-{
-	// Bind Compute Shader
-	renderer::bind(compute_eff);
-	// Bind data as SSBO
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, G_Position_buffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, G_Velocity_buffer);
-	// Dispatch
-	glDispatchCompute(MAX_PARTICLES / 128, 1, 1);
-	// Sync, wait for completion
-	glMemoryBarrier(GL_ALL_BARRIER_BITS);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-	// *********************************
-	// Bind render effect
-	renderer::bind(smoke_eff);
-	// Create MV matrix
-	mat4 M = smoke_M;
-	auto MV = V * M;
-	// Set the colour uniform
-	glUniform4fv(smoke_eff.get_uniform_location("colour"), 1, value_ptr(vec4(1.0f)));
-	// Set MV, and P matrix uniforms seperatly
-	glUniformMatrix4fv(smoke_eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(MV));
-	glUniformMatrix4fv(smoke_eff.get_uniform_location("P"), 1, GL_FALSE, value_ptr(P));
-	// Set point_size size uniform to .1f
-	glUniform1f(smoke_eff.get_uniform_location("point_size"), 0.1f);
-	// Bind particle texture
-	renderer::bind(smoke, 0);
-	// *********************************
-
-	// Bind position buffer as GL_ARRAY_BUFFER
-	glBindBuffer(GL_ARRAY_BUFFER, G_Position_buffer);
-	// Setup vertex format
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, (void *)0);
-	// Enable Blending
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	// Disable Depth Mask
-	glDepthMask(GL_FALSE);
-	// Render
-	glDrawArrays(GL_POINTS, 0, MAX_PARTICLES);
-	// Tidy up, enable depth mask
-	glDepthMask(GL_TRUE);
-	// Disable Blend
-	glDisable(GL_BLEND);
-	// Unbind all arrays
-	glDisableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glUseProgram(0);
-}
-
-
 // Render asteroid particles
 void render_particles(effect compute_eff, effect eff,
 					  const unsigned int MAX_PARTICLES, GLuint G_Position_buffer, GLuint G_Velocity_buffer,
-					  mat4 M, mat4 P, mat4 V)
+					  mat4 M, mat4 PV)
 {
 
 	// Bind Compute Shader
@@ -687,7 +649,7 @@ void render_particles(effect compute_eff, effect eff,
 	// Bind render effect
 	renderer::bind(eff);
 	// Create MVP matrix
-	auto MVP = P * V * M;
+	auto MVP = PV * M;
 	// Set the colour uniform
 	glUniform4fv(eff.get_uniform_location("colour"), 1, value_ptr(vec4(0.3f, 0.4f, 0.52f, 0.75f)));
 	// Set MVP matrix uniform
