@@ -12,7 +12,6 @@ layout(location = 0) in vec2 tex_coord;
 layout(location = 0) out vec4 colour;
 
 void main() {
-  // *********************************
   // Sample textures
   vec4 tex_sample = texture(tex, tex_coord);
   vec4 alpha_sample = texture(alpha_map, tex_coord);
@@ -20,5 +19,4 @@ void main() {
   colour = tex_sample * alpha_sample;
   // Ensure alpha is 1
   colour.a = 1.0f;
-  // *********************************
 }

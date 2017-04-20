@@ -53,7 +53,7 @@ uniform spot_light spots[1];
 uniform material mat;
 // Eye position
 uniform vec3 eye_pos;
-// Texture
+// Textures
 uniform sampler2D tex[2];
 // Blend map
 uniform sampler2D blend_map;
@@ -62,7 +62,7 @@ uniform sampler2D normal_map;
 // Shadow map to sample from
 uniform sampler2D shadow_map;
 
-// Incoming texture coordinate
+// Incoming position
 layout(location = 0) in vec3 vertex_position;
 // Incoming texture coordinate
 layout(location = 1) in vec2 tex_coord_out;
@@ -99,7 +99,7 @@ void main() {
 	{
 		colour += calculate_point(points[i], mat, vertex_position, new_normal, view_dir, tex_colour);
 	}
-	// Sum spot lights
+	// Sum spot lights (taking shadow into account)
 	for (int i = 0; i < 1; ++i)
 	{
 		colour += calculate_spot(spots[i], mat, vertex_position, new_normal, view_dir, tex_colour) * shade;

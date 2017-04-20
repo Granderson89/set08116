@@ -26,18 +26,29 @@ void main() {
   // Angle
   float delta_angle = (2.0 * M_PI) / 25.0f;
 
+  // Create a disk to be environment mapped
   // *********************************************************
   // Process is:
-  // 1. Calculate position in camera space (position + offset)
-  //     a. Multiply the offset by the point size for scaling
-  // 2. Transform into camera space for gl_Position
-  // 3. Set appropriate texture coordinate
-  // 4. Emit
+  // 1. Start above the incoming position (top of the circle to be made)
+  //    a. Multiply the offset by the point size for scaling
+  // 2. Calculate position in camera space
+  // 3. Set appropriate texture coord (environment mapping)
+  // 4. Emit vertex
+  // 5. Repeat for centre of the circle
+  // 6. Repeat for the final vertex of this triangle which is
+  //	delta_angle round from the top
+  // 7. Complete the the triangle strip with the next vertex
+  //	in the circle
+  // 8. Save this vertex to be used as the start of the next
+  //	part of the circle
+  // 9. Emit primitive
   // *********************************************************
 
+  // Carry vertex to be carried over to the next triangle strip
+  // primitive
+  // Top of triangle
   vec2 carry_vert = position.xy + vec2(0.0, 0.5) * point_size;
 
-  // Create a disk to be environment mapped
   for (int i = 1; i < 26; i++)
   {
 	 // Vertex 1 is top

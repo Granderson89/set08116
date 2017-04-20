@@ -13,23 +13,22 @@ float calculate_fog(in float fog_coord, in vec4 fog_colour, in float fog_start, 
   float result = 0.0;
 
   // Calculate fog
-  if (fog_type == FOG_LINEAR) {
+  if (fog_type == FOG_LINEAR) 
+  {
     // Linear fog
     result = (fog_end - fog_coord) / (fog_end - fog_start);
-  } else if (fog_type == FOG_EXP) {
-    // *********************************
+  } 
+  else if (fog_type == FOG_EXP) 
+  {
     // Exponential fog
 	result = exp(-fog_density * fog_coord);
-    // *********************************
-  } else if (fog_type == FOG_EXP2) {
-    // *********************************
+  } 
+  else if (fog_type == FOG_EXP2) 
+  {
     // Exponential squared fog
 	result = exp(-pow(fog_density * fog_coord, 2.0f));
-    // *********************************
   }
-  // *********************************
-  // Result is 1 minus result clamped to 1.0 to 0.0
-  result = clamp(1 - result, 0.0f, 1.0f);
-  // *********************************
+  // Result is 1 minus result clamped to 0.7 to 0.0
+  result = clamp(1 - result, 0.0f, 0.7f);
   return result;
 }

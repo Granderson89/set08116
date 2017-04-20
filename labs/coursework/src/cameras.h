@@ -31,7 +31,6 @@ void load_cameras(target_camera &tcam, free_camera &fcam, chase_camera &ccam)
 	ccam.set_pos_offset(vec3(0.0f, 2.0f, 10.0f));
 	ccam.set_springiness(0.5f);
 	ccam.set_projection(quarter_pi<float>(), renderer::get_screen_aspect(), 0.1f, 1000.0f);
-
 }
 
 // Update the chase camera
@@ -137,7 +136,6 @@ void target_camera_update(target_camera &tcam, float delta_time, mesh &stars)
 	tcam.update(delta_time);
 	// Set skybox position to camera position (camera in centre of skybox)
 	stars.get_transform().position = tcam.get_position();
-
 }
 
 // Change the active camera

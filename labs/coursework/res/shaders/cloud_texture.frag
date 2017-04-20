@@ -24,7 +24,6 @@ struct material {
 #endif
 
 // Forward declarations of used functions
-
 vec4 calculate_point(in point_light point, in material mat, in vec3 position, in vec3 normal, in vec3 view_dir,
                      in vec4 tex_colour);
 vec3 calc_normal(in vec3 normal, in vec3 tangent, in vec3 binormal, in sampler2D normal_map, in vec2 tex_coord);
@@ -41,7 +40,7 @@ uniform sampler2D tex;
 // Normal map to sample from
 uniform sampler2D normal_map;
 
-// Incoming texture coordinate
+// Incoming position
 layout(location = 0) in vec3 vertex_position;
 // Incoming texture coordinate
 layout(location = 1) in vec2 tex_coord_out;
@@ -56,8 +55,8 @@ layout(location = 4) in vec3 binormal_out;
 layout(location = 0) out vec4 colour;
 
 void main() {
-	// Calculate view direction
 	colour = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	// Calculate view direction
 	vec3 view_dir = normalize(eye_pos - vertex_position);
 	// Sample texture
 	vec4 tex_colour = texture(tex, tex_coord_out);

@@ -36,8 +36,6 @@ layout(location = 4) out vec3 binormal_out;
 layout (location = 5) out vec4 light_space_pos;
 // Camera space position
 layout(location = 6) out vec4 CS_position;
-// Model position
-layout(location = 7) out vec3 model_position;
 
 void main()
 {
@@ -57,5 +55,4 @@ void main()
 	binormal_out = N * binormal;
     // Transform position into light space
 	light_space_pos = lightMVP * vec4(position, 1.0f);
-	model_position = position;
 }

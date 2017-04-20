@@ -72,7 +72,7 @@ uniform float fog_density;
 // Fog type
 uniform int fog_type;
 
-// Incoming texture coordinate
+// Incoming position
 layout(location = 0) in vec3 vertex_position;
 // Incoming texture coordinate
 layout(location = 1) in vec2 tex_coord_out;
@@ -104,23 +104,17 @@ void main() {
 	{
 		colour += calculate_point(points[i], mat, vertex_position, new_normal, view_dir, tex_colour);
 	}
-	// Sum spot lights
+	// Sum spot lights (taking shadow into account)
 	for (int i = 0; i < 2; ++i)
 	{
 		colour += calculate_spot(spots[i], mat, vertex_position, new_normal, view_dir, tex_colour) * shade;
 	}
+	// Calculate fog coord
+	float fog_coord = abs(CS_position.z / CS_position.w);
+	// Calculate fog factor
+	float fog_factor = calculate_fog(fog_coord, fog_colour, fog_start, fog_end, fog_density, fog_type);
+	// Colour is mix between colour and fog colour based on factor
+	colour = mix(colour, fog_colour, fog_factor);
 	// Set alpha to 1.0f
 	colour.a = 1.0f;
-	
-	  // *********************************
-  // Calculate fog coord
-  // - convert from homogeneous
-  // - ensure value is positive (we want the size of the value)
-  float fog_coord = abs(CS_position.z / CS_position.w);
-  // Calculate fog factor
-  float fog_factor = calculate_fog(fog_coord, fog_colour, fog_start, fog_end, fog_density, fog_type);
-  // Colour is mix between colour and fog colour based on factor
-  colour = mix(colour, fog_colour, fog_factor);
-  // *********************************
-  
 }

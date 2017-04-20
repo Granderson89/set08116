@@ -2,7 +2,7 @@
 // Functions to create a shadow map, render the different
 // objects in the scene and render the fire particle effect
 // render_fire not currently working properly
-// Last modified - 06/04/2017
+// Last modified - 20/04/2017
 
 #pragma once
 
@@ -32,31 +32,29 @@ void create_shadow_map(effect shadow_eff,
 	LightProjectionMat = perspective<float>(90.f, renderer::get_screen_aspect(), 0.1f, 1000.f);
 	// Bind shader
 	renderer::bind(shadow_eff);
+	// View matrix taken from shadow map
+	auto V = shadow.get_view();
 	// Render Enterprise
 	for (size_t i = 0; i < enterprise.size(); i++) {
-		// SET M to be the usual mesh  transform matrix
+		// SET M to be the usual mesh transform matrix
 		auto M = enterprise[i].get_transform().get_transform_matrix();
-
 		// Apply the heirarchy chain
 		for (size_t j = i; j > 0; j--) {
 			M = enterprise[j - 1].get_transform().get_transform_matrix() * M;
 		}
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
 		auto MVP = LightProjectionMat * V * M;
 		// Set MVP matrix uniform
 		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
 			1,
 			GL_FALSE,
 			value_ptr(MVP));
+		// Render mesh
 		renderer::render(enterprise[i]);
 	}
 	for (int i = 0; i < motions.size(); i++) {
 		auto m = motions[i];
 		// Create MVP matrix
 		auto M = m.get_transform().get_transform_matrix();
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
 		auto MVP = LightProjectionMat * V * M;
 		// Set MVP matrix uniform
 		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
@@ -71,8 +69,6 @@ void create_shadow_map(effect shadow_eff,
 		auto m = e.second;
 		// Create MVP matrix
 		auto M = m.get_transform().get_transform_matrix();
-		// View matrix taken from shadow map
-		auto V = shadow.get_view();
 		auto MVP = LightProjectionMat * V * M;
 		// Set MVP matrix uniform
 		glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
@@ -85,7 +81,6 @@ void create_shadow_map(effect shadow_eff,
 	// Render Rama
 	auto m = rama;
 	auto M = m.get_transform().get_transform_matrix();
-	auto V = shadow.get_view();
 	auto MVP = LightProjectionMat * V * M;
 	// Set MVP matrix uniform
 	glUniformMatrix4fv(shadow_eff.get_uniform_location("MVP"),
@@ -105,7 +100,6 @@ void render_clouds(effect cloud_eff,
 				   mesh clouds, 
 				   texture cloudsTex, texture normal_map, 
 				   vector<point_light> points, 
-				   shadow_map shadow, mat4 LightProjectionMat, 
 				   mat4 PV, vec3 cam_pos)
 {
 	// Render clouds
@@ -128,14 +122,6 @@ void render_clouds(effect cloud_eff,
 		1,
 		GL_FALSE,
 		value_ptr(clouds.get_transform().get_normal_matrix()));
-	// Set lightMVP uniform
-	// Multiply together with LightProjectionMat
-	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
-	// Set uniform
-	glUniformMatrix4fv(cloud_eff.get_uniform_location("lightMVP"),
-		1,
-		GL_FALSE,
-		value_ptr(lightMVP));
 	// Bind material
 	renderer::bind(clouds.get_material(), "mat");
 	// Bind light
@@ -149,10 +135,6 @@ void render_clouds(effect cloud_eff,
 	glUniform1i(cloud_eff.get_uniform_location("normal_map"), 1);
 	// Set eye position- Get this from active camera
 	glUniform3fv(cloud_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture
-	renderer::bind(shadow.buffer->get_depth(), 2);
-	// Set the shadow_map uniform
-	glUniform1i(cloud_eff.get_uniform_location("shadow_map"), 2);
 	// Render mesh
 	renderer::render(clouds);
 }
@@ -175,18 +157,6 @@ void render_skybox(effect skybox_eff,
 	// Bind the cube map and set it
 	renderer::bind(cube_map, 0);
 	glUniform1i(skybox_eff.get_uniform_location("cubemap"), 0);
-	// *********************************
-	// Set fog colour to the same as the clear colour
-	glUniform4fv(skybox_eff.get_uniform_location("fog_colour"), 1, value_ptr(vec4(0.5f, 0.5f, 0.5f, 1.0f)));
-	// Set fog start:  5.0f
-	glUniform1f(skybox_eff.get_uniform_location("fog_start"), 5.0f);
-	// Set fog end:  100.0f
-	glUniform1f(skybox_eff.get_uniform_location("fog_end"), 100.0f);
-	// Set fog density: 0.04f
-	glUniform1f(skybox_eff.get_uniform_location("fog_density"), 0.04f);
-	// Set fog type: FOG_EXP2
-	glUniform1i(skybox_eff.get_uniform_location("fog_type"), FOG_EXP2);
-	// *********************************
 	// Render the skybox
 	renderer::render(stars);
 	// Enable depth test, depth mask, face culling
@@ -195,16 +165,13 @@ void render_skybox(effect skybox_eff,
 	glEnable(GL_CULL_FACE);
 }
 
-// Render the sun, planets etc.
+// Render the basic planets etc.
 void render_solar_objects(effect eff,
-	mesh m,
-	texture tex, texture normal_map,
-	vector<point_light> points, vector<spot_light> spots,
-	shadow_map shadow, mat4 LightProjectionMat,
-	mat4 PV, vec3 cam_pos)
+						  mesh m,
+						  texture tex, texture normal_map,
+						  shadow_map shadow, mat4 LightProjectionMat, 
+						  mat4 PV)
 {
-	// Bind effect
-	renderer::bind(eff);
 	// Create MVP matrix
 	auto M = m.get_transform().get_transform_matrix();
 	auto MVP = PV * M;
@@ -218,7 +185,7 @@ void render_solar_objects(effect eff,
 		1,
 		GL_FALSE,
 		value_ptr(M));
-	// Set N matrix uniform - remember - 3x3 matrix
+	// Set N matrix uniform
 	glUniformMatrix3fv(eff.get_uniform_location("N"),
 		1,
 		GL_FALSE,
@@ -231,37 +198,28 @@ void render_solar_objects(effect eff,
 		value_ptr(lightMVP));
 	// Bind material
 	renderer::bind(m.get_material(), "mat");
-	// Bind light
-	renderer::bind(points, "points");
-	// Bind spot light
-	renderer::bind(spots, "spots");
 	// Bind and set textures
 	renderer::bind(tex, 0);
 	glUniform1i(eff.get_uniform_location("tex"), 0);
-	// Bind normal_map
+	// Bind and set normal_map
 	renderer::bind(normal_map, 1);
-	// Set normal_map uniform
 	glUniform1i(eff.get_uniform_location("normal_map"), 1);
-	// Set eye position- Get this from active camera
-	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture
-	renderer::bind(shadow.buffer->get_depth(), 2);
-	// Set the shadow_map uniform
-	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
 	// Render mesh
 	renderer::render(m);
 }
 
-
-// Render the sun, planets etc.
+// Render the sun
 void render_sun(effect eff, 
-						  mesh m, 
-						  texture tex, texture normal_map, 
-						  vector<point_light> points, vector<spot_light> spots, 
-						  shadow_map shadow, mat4 LightProjectionMat, 
-						  mat4 PV, vec3 cam_pos, float explode_factor, float peak_factor, vec3 sun_activity)
+				mesh m, 
+				texture tex, texture normal_map, 
+				vector<point_light> points, vector<spot_light> spots, 
+				shadow_map shadow, mat4 LightProjectionMat, 
+			    mat4 PV, vec3 cam_pos, 
+				float explode_factor, float peak_factor, vec3 sun_activity)
 {
-	// Bind effect
+	// Disable cull face
+	glDisable(GL_CULL_FACE);
+	// Bind sun effect
 	renderer::bind(eff);
 	// Create MVP matrix
 	auto M = m.get_transform().get_transform_matrix();
@@ -276,7 +234,7 @@ void render_sun(effect eff,
 		1,
 		GL_FALSE,
 		value_ptr(M));
-	// Set N matrix uniform - remember - 3x3 matrix
+	// Set N matrix uniform
 	glUniformMatrix3fv(eff.get_uniform_location("N"),
 		1,
 		GL_FALSE,
@@ -287,24 +245,22 @@ void render_sun(effect eff,
 		1,
 		GL_FALSE,
 		value_ptr(lightMVP));
-	// Bind material
-	renderer::bind(m.get_material(), "mat");
 	// Bind light
 	renderer::bind(points, "points");
 	// Bind spot light
 	renderer::bind(spots, "spots");
-	// Bind and set textures
+	// Bind material
+	renderer::bind(m.get_material(), "mat");
+	// Set eye position
+	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind and set texture
 	renderer::bind(tex, 0);
 	glUniform1i(eff.get_uniform_location("tex"), 0);
-	// Bind normal_map
+	// Bind and set normal_map
 	renderer::bind(normal_map, 1);
-	// Set normal_map uniform
 	glUniform1i(eff.get_uniform_location("normal_map"), 1);
-	// Set eye position- Get this from active camera
-	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture
+	// Bind and set shadow map texture
 	renderer::bind(shadow.buffer->get_depth(), 2);
-	// Set the shadow_map uniform
 	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
 	// Set explode factor uniform
 	glUniform1f(eff.get_uniform_location("explode_factor"), explode_factor);
@@ -314,15 +270,17 @@ void render_sun(effect eff,
 	glUniform3fv(eff.get_uniform_location("sun_activity"), 1, value_ptr(sun_activity));
 	// Render mesh
 	renderer::render(m);
+	glEnable(GL_CULL_FACE);
 }
 
 // Render Jupiter
 void render_jupiter(effect eff,
-	mesh m,
-	array<texture, 14> texs,
-	vector<point_light> points, vector<spot_light> spots,
-	shadow_map shadow, mat4 LightProjectionMat,
-	mat4 PV, vec3 cam_pos, float weather_factor)
+					mesh m,
+					array<texture, 14> texs,
+					vector<point_light> points, vector<spot_light> spots,
+					shadow_map shadow, mat4 LightProjectionMat,
+					mat4 PV, vec3 cam_pos, 
+					float weather_factor)
 {
 	// Bind effect
 	renderer::bind(eff);
@@ -339,7 +297,7 @@ void render_jupiter(effect eff,
 		1,
 		GL_FALSE,
 		value_ptr(M));
-	// Set N matrix uniform - remember - 3x3 matrix
+	// Set N matrix uniform
 	glUniformMatrix3fv(eff.get_uniform_location("N"),
 		1,
 		GL_FALSE,
@@ -356,21 +314,88 @@ void render_jupiter(effect eff,
 	renderer::bind(points, "points");
 	// Bind spot light
 	renderer::bind(spots, "spots");
-	for (int i = 0; i < texs.size(); i++)
+	// Decide which textures to bind
+	int tex1, tex2;
+	if (weather_factor < 0.07)
 	{
-		// Bind and set textures
-		renderer::bind(texs[i], i);
-		string uniform = "tex[" + to_string(i) + "]";
-		glUniform1i(eff.get_uniform_location(uniform), i);
+		tex1 = 0;
+		tex2 = 1;
 	}
+	else if (weather_factor < 0.14)
+	{
+		tex1 = 1;
+		tex2 = 2;
+	}
+	else if (weather_factor < 0.21)
+	{
+		tex1 = 2;
+		tex2 = 3;
+	}
+	else if (weather_factor < 0.28)
+	{
+		tex1 = 3;
+		tex2 = 4;
+	}
+	else if (weather_factor < 0.35)
+	{
+		tex1 = 4;
+		tex2 = 5;
+	}
+	else if (weather_factor < 0.42)
+	{
+		tex1 = 5;
+		tex2 = 6;
+	}
+	else if (weather_factor < 0.49)
+	{
+		tex1 = 6;
+		tex2 = 7;
+	}
+	else if (weather_factor < 0.56)
+	{
+		tex1 = 7;
+		tex2 = 8;
+	}
+	else if (weather_factor < 0.63)
+	{
+		tex1 = 8;
+		tex2 = 9;
+	}
+	else if (weather_factor < 0.70)
+	{
+		tex1 = 9;
+		tex2 = 10;
+	}
+	else if (weather_factor < 0.77)
+	{
+		tex1 = 10;
+		tex2 = 11;
+	}
+	else if (weather_factor < 0.84)
+	{
+		tex1 = 11;
+		tex2 = 12;
+	}
+	else if (weather_factor < 0.91)
+	{
+		tex1 = 12;
+		tex2 = 13;
+	}
+	else
+	{
+		tex1 = 13;
+		tex2 = 0;
+	}
+	// Bind and set textures
+	renderer::bind(texs[tex1], 0);
+	renderer::bind(texs[tex2], 1);
+	glUniform1i(eff.get_uniform_location("tex[0]"), 0);
+	glUniform1i(eff.get_uniform_location("tex[1]"), 1);
 	// Set eye position- Get this from active camera
 	glUniform3fv(eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// Bind shadow map texture
-	renderer::bind(shadow.buffer->get_depth(), 14);
-	// Set the shadow_map uniform
-	glUniform1i(eff.get_uniform_location("shadow_map"), 14);
-	// Set weather factor
-	glUniform1f(eff.get_uniform_location("weather_factor"), weather_factor);
+	// Bind and set shadow map texture
+	renderer::bind(shadow.buffer->get_depth(), 2);
+	glUniform1i(eff.get_uniform_location("shadow_map"), 2);
 	// Render mesh
 	renderer::render(m);
 }
@@ -387,6 +412,24 @@ void render_enterprise(effect ship_eff,
 	renderer::bind(ship_eff);
 	// Set the texture value for the shader here
 	glUniform1i(ship_eff.get_uniform_location("tex"), 0);
+	// Bind material
+	renderer::bind(enterprise[0].get_material(), "mat");
+	// Bind point light
+	renderer::bind(points, "points");
+	// Bind spot light
+	renderer::bind(spots, "spots");
+	// Bind texture to renderer
+	renderer::bind(tex, 0);
+	// Bind normal_map
+	renderer::bind(normal_map, 1);
+	// Set normal_map uniform
+	glUniform1i(ship_eff.get_uniform_location("normal_map"), 1);
+	// Set eye position
+	glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
+	// Bind shadow map texture
+	renderer::bind(shadow.buffer->get_depth(), 2);
+	// Set the shadow_map uniform
+	glUniform1i(ship_eff.get_uniform_location("shadow_map"), 2);
 	// Find the lcoation for the MVP uniform
 	const auto loc = ship_eff.get_uniform_location("MVP");
 	// Render Enterprise
@@ -410,27 +453,13 @@ void render_enterprise(effect ship_eff,
 			1,
 			GL_FALSE,
 			value_ptr(lightMVP));
-		// Bind material
-		renderer::bind(enterprise[i].get_material(), "mat");
-		// Bind point light
-		renderer::bind(points, "points");
-		// Bind spot light
-		renderer::bind(spots, "spots");
-		// Bind texture to renderer
-		renderer::bind(tex, 0);
-		// Bind normal_map
-		renderer::bind(normal_map, 1);
-		// Set normal_map uniform
-		glUniform1i(ship_eff.get_uniform_location("normal_map"), 1);
-		// Set eye position
-		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-		// Bind shadow map texture
-		renderer::bind(shadow.buffer->get_depth(), 2);
-		// Set the shadow_map uniform
-		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 2);
 		// Render mesh
 		renderer::render(enterprise[i]);
 	}
+	// Bind material
+	renderer::bind(motions[0].get_material(), "mat");
+	// Bind texture
+	renderer::bind(motions_textures[0], 0);
 	for (int i = 0; i < motions.size(); i++)
 	{
 		auto M = motions[i].get_transform().get_transform_matrix();
@@ -446,19 +475,6 @@ void render_enterprise(effect ship_eff,
 			1,
 			GL_FALSE,
 			value_ptr(lightMVP));
-		// Bind material
-		renderer::bind(motions[i].get_material(), "mat");
-		// Bind point light
-		renderer::bind(points, "points");
-		// Bind spot light
-		renderer::bind(spots, "spots");
-		renderer::bind(motions_textures[i], 0);
-		// Set eye position
-		glUniform3fv(ship_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-		// Bind shadow map texture
-		renderer::bind(shadow.buffer->get_depth(), 1);
-		// Set the shadow_map uniform
-		glUniform1i(ship_eff.get_uniform_location("shadow_map"), 1);
 		renderer::render(motions[i]);
 	}
 }
@@ -495,7 +511,6 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 	renderer::bind(rama.get_material(), "mat");
 	// Bind light
 	renderer::bind(points, "points");
-	// Bind light
 	renderer::bind(spots, "spots");
 	// Bind textures
 	renderer::bind(outside, 0);
@@ -561,16 +576,23 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 	glUniform1f(inside_eff.get_uniform_location("fog_start"), 5.0f);
 	// Set fog end:  100.0f
 	glUniform1f(inside_eff.get_uniform_location("fog_end"), 100.0f);
-	// Set fog density: 0.1f
+	// Set fog density: 0.04f
 	glUniform1f(inside_eff.get_uniform_location("fog_density"), 0.04f);
 	// Set fog type: FOG_EXP2
 	glUniform1i(inside_eff.get_uniform_location("fog_type"), FOG_EXP2);
 	renderer::render(rama);
 	glEnable(GL_CULL_FACE);
-	
+}
+
+void render_terrain_cube(effect terrain_eff,
+	mesh cube_terrain,
+	array<texture, 4> terrain_texs,
+	vector<point_light> points, vector<spot_light> spots,
+	shadow_map shadow, mat4 &LightProjectionMat,
+	mat4 PV, mat4 V, vec3 cam_pos)
+{
 	// Bind effect
 	renderer::bind(terrain_eff);
-	// Get PV
 	// Set the texture value for the shader here
 	glUniform1i(terrain_eff.get_uniform_location("tex[0]"), 0);
 	glUniform1i(terrain_eff.get_uniform_location("tex[1]"), 1);
@@ -579,18 +601,15 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 	// Find the lcoation for the MVP uniform
 	const auto loc = terrain_eff.get_uniform_location("MVP");
 	// Bind material
-	renderer::bind(rama_terrain[0].get_material(), "mat");
+	renderer::bind(cube_terrain.get_material(), "mat");
 	// Bind point light
-	renderer::bind(points_rama, "points");
+	renderer::bind(points, "points");
 	// Bind spot light
-	renderer::bind(spots_rama, "spots");
-	// Bind texture to renderer
+	renderer::bind(spots, "spots");
+	// Bind textures to renderer
 	renderer::bind(terrain_texs[0], 0);
-	// Bind texture to renderer
 	renderer::bind(terrain_texs[1], 1);
-	// Bind texture to renderer
 	renderer::bind(terrain_texs[2], 2);
-	// Bind texture to renderer
 	renderer::bind(terrain_texs[3], 3);
 	// Set fog colour
 	glUniform4fv(terrain_eff.get_uniform_location("fog_colour"), 1, value_ptr(vec4(0.412f, 1.0f, 0.996f, 1.0f)));
@@ -598,36 +617,34 @@ void render_rama(effect outside_eff, effect inside_eff, effect terrain_eff,
 	glUniform1f(terrain_eff.get_uniform_location("fog_start"), 5.0f);
 	// Set fog end:  100.0f
 	glUniform1f(terrain_eff.get_uniform_location("fog_end"), 100.0f);
-	// Set fog density: 0.1f
+	// Set fog density: 0.04f
 	glUniform1f(terrain_eff.get_uniform_location("fog_density"), 0.04f);
 	// Set fog type: FOG_EXP2
 	glUniform1i(terrain_eff.get_uniform_location("fog_type"), FOG_EXP2);
 	// Set eye position
 	glUniform3fv(terrain_eff.get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
-	// THIS SECTION CAUSES THE FRAME RATE TO SLOW BY A FACTOR OF 3!
-	// MUST FIX
-	/*
-	// Render Rama terrain
-	for (size_t i = 0; i < rama_terrain.size(); i++) {
-		// SET M to be the usual mesh transform matrix
-		auto M = rama_terrain[i].get_transform().get_transform_matrix();
-		// Apply the heirarchy chain
-		for (size_t j = i; j > 0; j--) {
-			M = rama_terrain[j - 1].get_transform().get_transform_matrix() * M;
-		}
-		// Set MVP matrix uniform
-		glUniformMatrix4fv(loc, 1, GL_FALSE, value_ptr(PV * M));
-		// Set M matrix uniform
-		glUniformMatrix4fv(terrain_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
-		// Set M matrix uniform
-		glUniformMatrix4fv(terrain_eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(V * M));
-		// Set N matrix uniform
-		glUniformMatrix3fv(terrain_eff.get_uniform_location("N"), 1, GL_FALSE,
-			value_ptr(rama_terrain[i].get_transform().get_normal_matrix()));
-		// Render mesh
-		renderer::render(rama_terrain[i]);
-	}
-	*/
+	auto M = cube_terrain.get_transform().get_transform_matrix();
+	// Set MVP matrix uniform
+	glUniformMatrix4fv(loc, 1, GL_FALSE, value_ptr(PV * M));
+	// Set M matrix uniform
+	glUniformMatrix4fv(terrain_eff.get_uniform_location("M"), 1, GL_FALSE, value_ptr(M));
+	// Set MV matrix uniform
+	glUniformMatrix4fv(terrain_eff.get_uniform_location("MV"), 1, GL_FALSE, value_ptr(V * M));
+	// Set N matrix uniform
+	glUniformMatrix3fv(terrain_eff.get_uniform_location("N"), 1, GL_FALSE,
+	value_ptr(cube_terrain.get_transform().get_normal_matrix()));
+	// Set lightMVP uniform
+	auto lightMVP = LightProjectionMat * shadow.get_view() * M;
+	glUniformMatrix4fv(terrain_eff.get_uniform_location("lightMVP"),
+		1,
+		GL_FALSE,
+		value_ptr(lightMVP));
+	// Bind shadow map texture
+	renderer::bind(shadow.buffer->get_depth(), 4);
+	// Set the shadow_map uniform
+	glUniform1i(terrain_eff.get_uniform_location("shadow_map"), 4);
+	// Render mesh
+	renderer::render(cube_terrain);
 }
 
 // Render asteroid particles
@@ -635,7 +652,6 @@ void render_particles(effect compute_eff, effect eff,
 					  const unsigned int MAX_PARTICLES, GLuint G_Position_buffer, GLuint G_Velocity_buffer,
 					  mat4 M, mat4 PV)
 {
-
 	// Bind Compute Shader
 	renderer::bind(compute_eff);
 	// Bind data as SSBO

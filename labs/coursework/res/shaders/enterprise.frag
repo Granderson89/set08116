@@ -77,8 +77,8 @@ layout(location = 5) in vec4 light_space_pos;
 layout(location = 0) out vec4 colour;
 
 void main() {
+	colour = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	// Calculate shade factor
-		colour = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	float shade = calculate_shadow(shadow_map, light_space_pos);
 	// Calculate view direction
 	vec3 view_dir = normalize(eye_pos - vertex_position);
@@ -91,7 +91,7 @@ void main() {
 	{
 		colour += calculate_point(points[i], mat, vertex_position, new_normal, view_dir, tex_colour);
 	}
-	// Sum spot lights
+	// Sum spot lights (taking shadow into account)
 	for (int i = 0; i < 1; ++i)
 	{
 		colour += calculate_spot(spots[i], mat, vertex_position, new_normal, view_dir, tex_colour) * shade;

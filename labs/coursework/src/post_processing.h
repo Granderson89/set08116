@@ -1,6 +1,6 @@
 // post_processing.h - Header file containing functions related
 // to post-processing techniques
-// Last modified - 17/04/2017
+// Last modified - 20/04/2017
 
 #pragma once
 
@@ -12,17 +12,20 @@ using namespace graphics_framework;
 using namespace glm;
 
 void load_post_processing(array<frame_buffer, 2> &temp_frames, frame_buffer &first_pass, array<frame_buffer, 2> &frames, frame_buffer &temp_frame, geometry &screen_quad, texture &alpha_map, map<string, effect> &effects) {
+	// DEPTH OF FIELD/BLUR
 	// Create 2 frame buffers - use screen width and height
 	temp_frames[0] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
 	temp_frames[1] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
 	// Create a first_pass frame
 	first_pass = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
 
-	// Create frame buffer - use screen width and height
+	// MOTION BLUR
+	// Create 2 frame buffers - use screen width and height
 	frames[0] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
 	frames[1] = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
 	// Create a temporary frame buffer
 	temp_frame = frame_buffer(renderer::get_screen_width(), renderer::get_screen_height());
+	
 	// Create screen quad
 	vector<vec3> screen_positions{ vec3(-1.0f, -1.0f, 0.0f), vec3(1.0f, -1.0f, 0.0f), vec3(-1.0f, 1.0f, 0.0f),
 	vec3(1.0f, 1.0f, 0.0f) };

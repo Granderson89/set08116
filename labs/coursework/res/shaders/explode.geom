@@ -1,13 +1,10 @@
 #version 440
 
-float rand(vec2 co){
-  return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
-}
-
-// Scale for normal
+// Explode factor (how much to deform the sun)
 uniform float explode_factor;
-
+// Peak factor (how much more to deform the active area)
 uniform float peak_factor;
+// Active position on sun surface
 uniform vec3 sun_activity;
 
 // Layout of incoming data
@@ -15,32 +12,30 @@ layout(triangles) in;
 // Layout of outgoing data
 layout(triangle_strip, max_vertices = 6) out;
 
-// Outgoing vertex position
+// Incoming vertex position
 layout (location = 0) in vec3 vertex_position_in[];
-// Outgoing texture coordinate
+// Incoming texture coordinate
 layout (location = 1) in vec2 tex_coord_out_in[];
-// Outgoing transformed normal
+// Incoming transformed normal
 layout(location = 2) in vec3 transformed_normal_in[];
 // Incoming tangent
 layout(location = 3) in vec3 tangent_out_in[];
 // Incoming binormal
 layout(location = 4) in vec3 binormal_out_in[];
-// Outgoing position in light space
+// Incoming position in light space
 layout (location = 5) in vec4 light_space_pos_in[];
-// Model position
-layout(location = 7) in vec3 model_position[];
 
-// Incoming texture coordinate
+// Outgoing position
 layout(location = 0) out vec3 vertex_position;
-// Incoming texture coordinate
+// Outgoing texture coordinate
 layout(location = 1) out vec2 tex_coord_out;
-// Incoming normal
+// Outgoing normal
 layout(location = 2) out vec3 transformed_normal;
-// Incoming tangent
+// Outgoing tangent
 layout(location = 3) out vec3 tangent_out;
-// Incoming binormal
+// Outgoing binormal
 layout(location = 4) out vec3 binormal_out;
-// Incoming light space position
+// Outgoing light space position
 layout(location = 5) out vec4 light_space_pos;
 
 

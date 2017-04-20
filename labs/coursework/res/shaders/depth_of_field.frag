@@ -19,7 +19,6 @@ layout(location = 0) in vec2 tex_coord;
 layout(location = 0) out vec4 colour;
 
 void main() {
-  // *********************************
   // Sample sharp texture
   vec4 sharp_sample = texture(sharp, tex_coord);
   // Sample blur texture
@@ -30,5 +29,4 @@ void main() {
   colour = mix(sharp_sample, blur_sample, clamp(range * abs(focus - dist), 0, 1));
   // Ensure alpha is 1.0
   colour.a = 1.0f;
-  // *********************************
 }
