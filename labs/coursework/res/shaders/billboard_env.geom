@@ -54,7 +54,7 @@ void main() {
 	 // Vertex 1 is top
 	 vec2 va = carry_vert;
 	 gl_Position = P * vec4(va, position.zw);
-	 tex_coord = normalize(reflect(vec3(va, 0.0f) - eye_pos, normal));
+	 tex_coord = normalize(reflect(vec3(va, 0.0f) - vec3(0.0f, 1.0f, 0.0f), normal));
 	 EmitVertex();
 	 
 	 // Vertex 2 is centre
@@ -66,7 +66,7 @@ void main() {
 	 // Vertex 3
 	 vec2 vc = position.xy + vec2(0.5 * sin(i * delta_angle), 0.5 * cos(i * delta_angle)) * point_size;
 	 gl_Position = P * vec4(vc, position.zw);
-	 tex_coord = normalize(reflect(vec3(vc, 0.0f) - eye_pos, normal));
+	 tex_coord = normalize(reflect(vec3(vc, 0.0f) - vec3(0.0f, 1.0f, 0.0f), normal));
 	 EmitVertex();
 
 	 i = i + 1;
@@ -74,7 +74,7 @@ void main() {
 	 // Vertex 4
 	 carry_vert = position.xy + vec2(0.5 * sin(i * delta_angle), 0.5 * cos(i * delta_angle)) * point_size;
 	 gl_Position = P * vec4(carry_vert, position.zw);
-	 tex_coord = normalize(reflect(vec3(carry_vert, 0.0f) - eye_pos, normal));
+	 tex_coord = normalize(reflect(vec3(carry_vert, 0.0f) - vec3(0.0f, 1.0f, 0.0f), normal));
 	 EmitVertex();
 
 	 EndPrimitive();

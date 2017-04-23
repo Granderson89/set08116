@@ -25,6 +25,7 @@ array<mesh, 7> enterprise;
 array<mesh, 2> motions;
 mesh rama;
 array<mesh, 6> rama_terrain;
+mesh cube;
 mesh cube_terrain;
 mesh stars;
 
@@ -196,6 +197,7 @@ void render_whole_scene(mat4 P, mat4 V, mat4 LightProjectionMat, vec3 cam_pos)
 		glUniformMatrix4fv(effects["distortion_eff"].get_uniform_location("MV"), 1, GL_FALSE, value_ptr(V));
 		glUniformMatrix4fv(effects["distortion_eff"].get_uniform_location("P"), 1, GL_FALSE, value_ptr(P));
 		glUniform1f(effects["distortion_eff"].get_uniform_location("point_size"), distortion_size);
+		glUniform3fv(effects["distortion_eff"].get_uniform_location("eye_pos"), 1, value_ptr(cam_pos));
 		renderer::bind(cube_map, 0);
 		glUniform1i(effects["distortion_eff"].get_uniform_location("tex"), 0);
 		renderer::render(distortion);
@@ -207,7 +209,7 @@ bool load_content() {
 	load_solar_objects(solar_objects, distortion, textures, jupiter_texs, normal_maps, orbit_factors, effects);
 	load_enterprise(enterprise, motions, textures, motions_textures, normal_maps, effects);
 	load_rama(rama, rama_terrain, textures, terrain_texs, normal_maps, effects);
-	load_terrain(cube_terrain, terrain_texs, effects);
+	load_terrain(cube_terrain, cube, terrain_texs, effects);
 	load_lights(points, spots, points_rama, spots_rama, rama.get_transform().position);
 	load_cameras(tcam, fcam, ccam);
 	glGenVertexArrays(1, &pvao);

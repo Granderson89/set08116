@@ -212,7 +212,7 @@ void load_solar_objects(map<string, mesh> &solar_objects, geometry &distortion, 
 	solar_objects["clouds"].get_transform().position = earth_position;
 	solar_objects["clouds"].get_transform().rotate(vec3(-half_pi<float>(), 0.0f, 0.0f));
 
-	solar_objects["comet"].get_transform().position = vec3(0.0f, 0.0f, 50.0f);
+	solar_objects["comet"].get_transform().position = vec3(-50.0f, 0.0f, 50.0f);
 	solar_objects["comet"].get_transform().scale = vec3(0.1f);
 
 	// SET MATERIALS
@@ -299,12 +299,12 @@ void load_solar_objects(map<string, mesh> &solar_objects, geometry &distortion, 
 	// Load in shaders for sun
 	effects["sun_eff"].add_shader("shaders/sun_shader.vert", GL_VERTEX_SHADER);
 	effects["sun_eff"].add_shader(planet_eff_frag_shaders, GL_FRAGMENT_SHADER);
-	effects["sun_eff"].add_shader("shaders/explode.geom", GL_GEOMETRY_SHADER);
+	effects["sun_eff"].add_shader("shaders/dynamic_sun.geom", GL_GEOMETRY_SHADER);
 	effects["sun_eff"].build();
 
 	// Load in distortion shaders
 	effects["distortion_eff"].add_shader("shaders/shader.vert", GL_VERTEX_SHADER);
-	effects["distortion_eff"].add_shader("shaders/billboard.geom", GL_GEOMETRY_SHADER);
+	effects["distortion_eff"].add_shader("shaders/billboard_env.geom", GL_GEOMETRY_SHADER);
 	effects["distortion_eff"].add_shader("shaders/shader.frag", GL_FRAGMENT_SHADER);
 	effects["distortion_eff"].build();
 
@@ -316,19 +316,22 @@ void load_solar_objects(map<string, mesh> &solar_objects, geometry &distortion, 
 }
 
 // Load the terrain
-void load_terrain(mesh &terrain, array<texture, 4> &terrain_texs, map<string, effect> &effects)
+void load_terrain(mesh &terrain, mesh &cube, array<texture, 4> &terrain_texs, map<string, effect> &effects)
 {
+	cube = mesh(geometry(geometry_builder::create_box(vec3(50.0f, 20.0f, 100.0f))));
+
 	// CREATE TERRAIN
 	// Geometry to load into
 	geometry geom;
 	// Load height map
 	texture height_map("textures/heightmap.jpg");
 	// Generate terrain
-	generate_terrain(geom, height_map, 50, 100, 5.0f);
+	generate_terrain(geom, height_map, 50, 100, 10.0f);
 	// Use geometry to create terrain mesh
 	terrain = mesh(geom);
 	// Transform terrain
 	terrain.get_transform().position = vec3(50.0f, -10.0f, -10.0f);
+	cube.get_transform().position = terrain.get_transform().position + vec3(0.0f, 5.0f, 0.0f);
 	// Set material
 	terrain.get_material().set_diffuse(vec4(0.5f, 0.5f, 0.5f, 1.0f));
 	terrain.get_material().set_specular(vec4(0.0f, 0.0f, 0.0f, 1.0f));

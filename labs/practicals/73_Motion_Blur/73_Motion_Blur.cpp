@@ -273,10 +273,10 @@ bool render() {
   // Bind frames[(current_frame + 1) % 2] to TU 1.
   renderer::bind(frames[(current_frame + 1) % 2].get_frame(), 1);
   // Set tex uniforms
-  glUniform1i(motion_blur.get_uniform_location("previous_frame"), 0);
-  glUniform1i(motion_blur.get_uniform_location("tex"), 1);
+  glUniform1i(motion_blur.get_uniform_location("previous_frame"), 1);
+  glUniform1i(motion_blur.get_uniform_location("tex"), 0);
   // Set blend factor (0.9f)
-  glUniform1f(motion_blur.get_uniform_location("blend_factor"), 0.2f);
+  glUniform1f(motion_blur.get_uniform_location("blend_factor"), 0.8f);
   // Render screen quad
   renderer::render(screen_quad);
 

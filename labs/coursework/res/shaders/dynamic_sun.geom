@@ -61,15 +61,15 @@ void main() {
   else
   {
 	if (distance(vertex_position_in[0], sun_activity) <= 2.0f)
-		{
-			gl_Position = gl_in[0].gl_Position - vec4(face_normal, 0.0f) * explode_factor * peak_factor;
-			vertex_position = vertex_position_in[0] - face_normal * explode_factor * peak_factor;
-		}
-		else
-		{
-			gl_Position = gl_in[0].gl_Position - vec4(face_normal, 0.0f) * explode_factor;
-			vertex_position = vertex_position_in[0] - face_normal * explode_factor;
-		}
+	{
+		gl_Position = gl_in[0].gl_Position - vec4(face_normal, 0.0f) * explode_factor * peak_factor;
+		vertex_position = vertex_position_in[0] - face_normal * explode_factor * peak_factor;
+	}
+	else
+	{
+		gl_Position = gl_in[0].gl_Position - vec4(face_normal, 0.0f) * explode_factor;
+		vertex_position = vertex_position_in[0] - face_normal * explode_factor;
+	}
   }
   tex_coord_out = tex_coord_out_in[0];
   transformed_normal = transformed_normal_in[0];
@@ -99,7 +99,7 @@ void main() {
   light_space_pos = light_space_pos_in[2];
   // Emit Vertex
   EmitVertex();
-
+  
   // Duplicate the triangle so no gaps appear in the render
   gl_Position = gl_in[0].gl_Position;
   vertex_position = vertex_position_in[0];
